@@ -11,6 +11,7 @@ import {
 import { ExternalLlmClient, WorkersAiClient, type LlmClient } from "@tripweave/ai";
 import { inventory, type Db } from "@tripweave/database";
 import type { Deps, Env } from "../env";
+import { KvSearchCache } from "./search-cache";
 
 /** Median catalogue rate for one room per night, in the currency most catalogue offers use. */
 async function catalogueBenchmark(internal: InternalInventoryProvider, input: HotelAvailabilityInput) {
@@ -52,6 +53,8 @@ export function defaultBuildProviders(env: Env, db: Db, _orgId: string, opts: { 
         baseUrl: env.SERPAPI_BASE_URL ?? "https://serpapi.com/search.json",
         now: () => new Date(),
         direct: { enabled: opts.googleHotelsDirect === true },
+        cache: env.CACHE ? new KvSearchCache(env.CACHE) : undefined,
+        cacheTtlSeconds: 15 * 60,
       }),
     );
   }

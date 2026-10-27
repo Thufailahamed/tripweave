@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { registerSchema } from "@tripweave/shared";
 import type { z } from "zod";
 import { Alert } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/form";
-import { ApiError, apiPost, errorMessage } from "@/lib/api";
+import { ApiError, apiGet, apiPost, errorMessage } from "@/lib/api";
 import { SESSION_KEY, type SessionData } from "@/lib/session";
 import { Turnstile, turnstileEnabled } from "@/components/turnstile";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,8 @@ export default function RegisterPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [captcha, setCaptcha] = React.useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = React.useState(0);
+  const platform = useQuery({ queryKey: ["platform-config"], queryFn: () => apiGet<{ signupsEnabled: boolean; maintenanceMode: boolean; supportEmail: string }>("/public/platform"), staleTime: 60_000, retry: false });
+  const registrationClosed = !!platform.data && (!platform.data.signupsEnabled || platform.data.maintenanceMode);
   const { register, handleSubmit, watch, setValue, setError: setFieldError, formState } = useForm<Input_>({
     resolver: zodResolver(registerSchema) as never,
     defaultValues: { organizationType: "tour_operator", country: "LK", defaultCurrency: "USD", timezone: "Asia/Colombo" },
@@ -53,6 +55,7 @@ export default function RegisterPage() {
     <div>
       <h1 className="text-4xl font-semibold leading-[1.05] tracking-[-0.06em]">Create your organisation</h1>
       <p className="mt-1 text-sm text-muted-foreground">You become the owner and can invite your team afterwards.</p>
+      {platform.data?.maintenanceMode ? <Alert tone="warning" className="mt-4" title="Registration is paused">TripWeave is undergoing scheduled maintenance. Please try again shortly{platform.data.supportEmail ? `, or contact ${platform.data.supportEmail}` : ""}.</Alert> : !platform.data?.signupsEnabled && platform.data ? <Alert tone="info" className="mt-4" title="Registration is currently closed">New organisations can only be created by the platform team. Contact support if you need an account.</Alert> : null}
       <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4" noValidate>
         {error ? <Alert tone="danger">{error}</Alert> : null}
         <fieldset className="grid gap-2 sm:grid-cols-2">
@@ -87,7 +90,7 @@ export default function RegisterPage() {
           <Input id="password" type="password" autoComplete="new-password" {...register("password")} />
         </Field>
         <Turnstile onToken={setCaptcha} resetKey={captchaKey} action="register" />
-        <Button type="submit" size="lg" loading={formState.isSubmitting}>
+        <Button type="submit" size="lg" loading={formState.isSubmitting} disabled={registrationClosed}>
           Create organisation
         </Button>
         <p className="text-center text-sm text-muted-foreground">

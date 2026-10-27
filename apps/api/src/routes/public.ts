@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { AppError, quoteAcceptSchema } from "@tripweave/shared";
-import { inventory, ops, quotes, trips } from "@tripweave/database";
+import { admin, inventory, ops, quotes, trips } from "@tripweave/database";
 import { renderProposalPdf } from "@tripweave/proposal-renderer";
 import type { Env, Vars } from "../env";
 import { sha256Hex } from "../lib/crypto";
@@ -8,6 +8,7 @@ import { clientIp, ok, parseBody, requireParam, type AppContext } from "../lib/h
 import { rateLimit } from "../middleware/auth";
 import type { StoredPackage } from "../services/pricing";
 import { clientViewFor } from "../services/quotes";
+import { platformSettings } from "../services/platform";
 
 /**
  * Unauthenticated, token-gated client endpoints. They expose only the allow-listed ClientQuoteView:
@@ -20,6 +21,18 @@ publicRoutes.use("*", async (c, next) => {
   c.res.headers.set("x-robots-tag", "noindex, nofollow");
   c.res.headers.set("cache-control", "no-store");
   c.res.headers.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
+});
+
+/** Public, non-sensitive platform status used by the app shell (announcement banner) and auth pages. */
+publicRoutes.get("/platform", async (c) => {
+  const settings = await platformSettings(c.get("db"), c.get("deps").now().getTime());
+  const announcement = settings.announcementBannerEnabled ? await admin.getActiveAnnouncement(c.get("db"), c.get("deps").now().toISOString()) : null;
+  return ok(c, {
+    signupsEnabled: settings.signupsEnabled,
+    maintenanceMode: settings.maintenanceMode,
+    supportEmail: settings.supportEmail,
+    announcement: announcement ? { id: announcement.id, title: announcement.title, body: announcement.body, tone: announcement.tone } : null,
+  });
 });
 
 async function resolveShare(c: AppContext) {

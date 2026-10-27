@@ -10,6 +10,7 @@ import { openSecret, sealSecret } from "../lib/secretbox";
 import { generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, otpauthUri, verifyTotp } from "../lib/totp";
 import { audit, cookieName, getAuth, rateLimit, requireAuth, SESSION_TTL_DAYS } from "../middleware/auth";
 import { sendEmail, verifyTurnstile } from "../services/email";
+import { platformSettings } from "../services/platform";
 import { pricingConfigSchema } from "@tripweave/shared";
 
 export const authRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -75,6 +76,9 @@ async function completeLogin(c: AppContext, user: identity.UserRow) {
 
 authRoutes.post("/register", rateLimit({ name: "register", limit: 10, windowSeconds: 3600 }), async (c) => {
   const body = await parseBody(c, registerSchema);
+  const settings = await platformSettings(c.get("db"), c.get("deps").now().getTime());
+  if (settings.maintenanceMode) throw new AppError("maintenance", "TripWeave is undergoing scheduled maintenance. Please try again shortly.", { supportEmail: settings.supportEmail || undefined });
+  if (!settings.signupsEnabled) throw new AppError("forbidden", "New registrations are currently closed. Please contact support.");
   if (!(await verifyTurnstile(c.env, c.get("deps"), body.turnstileToken, clientIp(c)))) throw new AppError("forbidden", "Human verification failed. Please try again.");
   const db = c.get("db");
   const email = body.email.toLowerCase();
@@ -84,6 +88,7 @@ authRoutes.post("/register", rateLimit({ name: "register", limit: 10, windowSeco
     owner: { email, displayName: body.displayName, passwordHash: await hashPassword(body.password, c.get("deps").pbkdf2Iterations) },
   });
   await ops.setSetting(db, organizationId, "pricing", pricingConfigSchema.parse({}), userId);
+  await identity.updateSubscription(db, organizationId, { seatLimit: settings.defaultSeatLimit, monthlyOptimisationLimit: settings.defaultOptimisationLimit });
   await ops.writeAudit(db, { organizationId, actorUserId: userId, action: "organization.created", resourceType: "organization", resourceId: organizationId, metadata: { type: body.organizationType }, requestId: c.get("requestId") });
   await startSession(c, userId, organizationId);
   await sendVerificationEmail(c, { id: userId, email });

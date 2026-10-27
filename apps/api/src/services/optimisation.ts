@@ -37,6 +37,8 @@ export function mealPlansAtLeast(min: MealPlan | null | undefined): MealPlan[] {
 export interface JobSummary {
   stage?: "fetched" | "done";
   candidates?: Record<string, string[]>;
+  /** Stops whose provider search completed; a retry resumes at the next unfinished stop. */
+  fetchedStops?: string[];
   providers?: (ProviderOutcome & { stopId: string })[];
   legs?: RouteLeg[];
   legWarnings?: string[];
@@ -56,6 +58,12 @@ export function toSearchStops(stops: ItineraryStop[]): SearchStop[] {
   return [...stops]
     .sort((a, b) => a.sequence - b.sequence)
     .map((s) => ({ id: s.id, destination: s.destination, latitude: s.latitude, longitude: s.longitude, arrivalDate: s.arrivalDate, departureDate: s.departureDate, nights: nightsBetween(s.arrivalDate, s.departureDate) }));
+}
+
+/** Stops still needing a provider query after a partial or retried fetch stage. */
+export function pendingStops<T extends { id: string }>(stops: T[], fetchedStops: string[] | undefined): T[] {
+  const done = new Set(fetchedStops ?? []);
+  return stops.filter((s) => !done.has(s.id));
 }
 
 /** Assembles the engine input from the trip, request and stored data. Pure; no I/O. */
@@ -221,12 +229,19 @@ export async function stageFetch(ctx: PipelineCtx, jobId: string): Promise<{ off
   await trips.updateJobProgress(ctx.db, jobId, 10, "routing");
   const legsResult = await computeStopLegs(ctx.env, ctx.db, ctx.deps, itinerary.stops);
 
-  const candidates: Record<string, string[]> = {};
-  const outcomes: JobSummary["providers"] = [];
-  let dropped = 0;
+  const candidates: Record<string, string[]> = { ...(summary.candidates ?? {}) };
+  const outcomes: JobSummary["providers"] = [...(summary.providers ?? [])];
+  const fetched = new Set(summary.fetchedStops ?? []);
+  const baseNotes = summary.notes ?? [];
+  let dropped = summary.dropped ?? 0;
   let duplicates = 0;
   let total = 0;
   for (const [i, stop] of stops.entries()) {
+    const existing = candidates[stop.id];
+    if (fetched.has(stop.id) && existing) {
+      total += existing.length;
+      continue;
+    }
     await trips.updateJobProgress(ctx.db, jobId, 15 + Math.round((i / stops.length) * 45), `searching:${stop.destination}`);
     const res = await searchAllProviders(providers, {
       organizationId: org, destination: stop.destination, latitude: stop.latitude, longitude: stop.longitude, checkIn: stop.arrivalDate, checkOut: stop.departureDate,
@@ -236,15 +251,23 @@ export async function stageFetch(ctx: PipelineCtx, jobId: string): Promise<{ off
       onCall: (o) => ops.recordProviderCall(ctx.db, { organizationId: org, providerKey: o.providerKey, operation: "availability", status: o.status === "ok" ? "ok" : o.status === "timeout" ? "timeout" : "error", latencyMs: o.latencyMs, errorCode: o.errorCode }),
     });
     dropped += res.dropped;
+    for (let j = outcomes.length - 1; j >= 0; j--) if (outcomes[j]!.stopId === stop.id) outcomes.splice(j, 1);
     for (const o of res.outcomes) outcomes.push({ ...o, stopId: stop.id });
     const merged = mergeDiscoveredOffers(res.offers);
     duplicates += merged.duplicates;
     const saved = await persistOffers(ctx, org, merged.offers);
     candidates[stop.id] = saved.map((o) => o.offerId);
+    fetched.add(stop.id);
     total += saved.length;
+    // Persist after each stop so a later failure resumes here instead of paying for earlier stops again.
+    await trips.saveJobSummary(ctx.db, jobId, {
+      ...summary, stage: "fetched", candidates, providers: outcomes, fetchedStops: [...fetched],
+      legs: legsResult.legs, legWarnings: legsResult.warnings, dropped, notes: baseNotes,
+      currency: request.constraints.budgetCurrency ?? trip.budgetCurrency,
+    } satisfies JobSummary);
   }
   const fetchNotes = duplicates > 0 ? [`${duplicates} discovery listing${duplicates === 1 ? "" : "s"} already existed in your catalogue or another source and ${duplicates === 1 ? "was" : "were"} merged into it.`] : [];
-  await trips.saveJobSummary(ctx.db, jobId, { ...summary, stage: "fetched", candidates, providers: outcomes, legs: legsResult.legs, legWarnings: legsResult.warnings, dropped, notes: [...(summary.notes ?? []), ...fetchNotes], currency: request.constraints.budgetCurrency ?? trip.budgetCurrency } satisfies JobSummary);
+  await trips.saveJobSummary(ctx.db, jobId, { ...summary, stage: "fetched", candidates, providers: outcomes, fetchedStops: [...fetched], legs: legsResult.legs, legWarnings: legsResult.warnings, dropped, notes: [...baseNotes, ...fetchNotes], currency: request.constraints.budgetCurrency ?? trip.budgetCurrency } satisfies JobSummary);
   await trips.updateJobProgress(ctx.db, jobId, 65, "optimising");
   return { offers: total };
 }
@@ -350,7 +373,8 @@ export async function loadJobSearchInput(ctx: PipelineCtx, organizationId: strin
 }
 
 export async function recheckOffer(ctx: PipelineCtx, organizationId: string, offer: NormalisedOffer, party: SearchInput["party"] & { childAges?: number[] }) {
-  const providers = ctx.deps.buildProviders(ctx.env, ctx.db, organizationId, { includeExternal: true, includeMock: true });
+  const integrations = await loadIntegrations(ctx.db, organizationId);
+  const providers = ctx.deps.buildProviders(ctx.env, ctx.db, organizationId, { includeExternal: true, includeMock: true, googleHotelsDirect: integrations.googleHotelsDirect });
   const provider = providers.find((p) => p.key === offer.providerKey);
   if (!provider) throw new AppError("provider_error", `Provider "${offer.providerKey}" is not available for price checks in this environment.`);
   const started = Date.now();

@@ -21,16 +21,41 @@ export function extraLines(items: QuoteItemInput[]): CostLine[] {
   return items.map((i) => ({ category: i.category, description: i.description, quantity: i.quantity, unitCostMinor: i.unitCostMinor, currency: i.currency, optional: i.optional || !i.included }));
 }
 
-/** Refuses to quote anything that is illustrative, expired or no longer available. */
-export function assertQuotable(pkg: StoredPackage, now: Date): void {
+/** Verification summary written by the package live-price check. */
+export interface PackageVerification {
+  status?: "verified" | "failed";
+  allVerified?: boolean;
+  checkedAt?: string;
+  validUntil?: string | null;
+  checks?: { stopId: string; offerId: string; status: string; message?: string }[];
+}
+
+/**
+ * Refuses to quote anything that is illustrative, expired or no longer available. External
+ * packages also need a fresh live price check; company-contract rates keep their existing rules.
+ */
+export function assertQuotable(pkg: StoredPackage, now: Date, verification?: PackageVerification, opts: { requireLiveExternal?: boolean } = {}): void {
   const problems: string[] = [];
+  const nowIso = now.toISOString();
+  const external = pkg.selections.filter((s) => s.offer.source === "external");
+  if (opts.requireLiveExternal !== false && external.length > 0) {
+    if (!verification?.allVerified) {
+      problems.push("A live price check is required before this package can be quoted.");
+    } else if (!verification.validUntil || verification.validUntil <= nowIso) {
+      problems.push("The live price check for this package has expired; check live prices again before quoting.");
+    }
+    for (const s of external) {
+      if (s.offer.verificationStatus !== "live_checked") problems.push(`The rate for ${s.offer.property.name} has not been live-checked; check live prices again before quoting.`);
+      if (!s.offer.expiresAt || s.offer.expiresAt <= nowIso) problems.push(`The live price check for ${s.offer.property.name} has expired; check live prices again before quoting.`);
+    }
+  }
   for (const s of pkg.selections) {
     const o = s.offer;
     if (o.isMock) problems.push(`${o.property.name} is illustrative mock data and cannot be quoted.`);
     if (o.availabilityStatus === "unavailable" || o.verificationStatus === "unavailable") problems.push(`${o.property.name} is unavailable.`);
-    if (o.verificationStatus === "expired" || (o.expiresAt && o.expiresAt < now.toISOString())) problems.push(`The rate for ${o.property.name} has expired; re-price the package first.`);
+    if (o.verificationStatus === "expired" || (o.expiresAt && o.expiresAt < nowIso)) problems.push(`The rate for ${o.property.name} has expired; re-price the package first.`);
   }
-  if (problems.length) throw new AppError("unprocessable", problems.join(" "), { problems });
+  if (problems.length) throw new AppError("unprocessable", [...new Set(problems)].join(" "), { problems: [...new Set(problems)] });
 }
 
 export interface BuiltVersion {

@@ -1,6 +1,6 @@
 # Implementation status report
 
-Covers roadmap phases 1–6 of the master prompt. "Verified" means executed in this repository's build environment (Windows, Node 24, workerd local runtime); nothing was deployed to a real Cloudflare account because no credentials were available.
+Covers roadmap phases 1–7 of the master prompt. "Verified" means executed in this repository's build environment (Windows, Node 24, workerd local runtime); nothing was deployed to a real Cloudflare account because no credentials were available.
 
 ## What was implemented
 
@@ -14,12 +14,14 @@ Covers roadmap phases 1–6 of the master prompt. "Verified" means executed in t
 
 **Phase 5 – Quotations.** Versioned immutable snapshots, FX snapshot per version, optimistic concurrency, lifecycle with enforced transitions, maker-checker approval, secure share links bound to versions, client acceptance, branded PDF (pdf-lib on Workers) stored in R2, allow-listed client view, mobile-first public page.
 
-**Phase 6 – Hardening.** 165 automated tests; security/tenant/abuse tests; supplier-failure tests; browser smoke test; docs.
+**Phase 6 – Hardening.** 227 automated tests; security/tenant/abuse tests; supplier-failure tests; browser smoke test; docs.
+
+**Phase 7 – Platform administration.** Dedicated `/admin` portal: platform overview with growth/activity/health alerts; organisation directory, creation, profile/status/subscription/team management; global user directory with account lifecycle, platform-role, membership, session, MFA and password-reset controls; optimisation job browser with cancel/retry; platform-wide audit log with tenant-metadata redaction; announcements and app-shell banner; email outbox with resend; provider/API/AI/sync telemetry; time-boxed support grants with immediate revocation; platform settings enforced server-side (sign-ups, maintenance mode, default limits, banner); manual maintenance runs; database footprint and integration status. `docs/admin-portal.md` documents the security model.
 
 ## Verification performed
 | Check | Result |
 |---|---|
-| `pnpm test` — 14 files, 165 tests (pricing, itinerary, optimiser, providers incl. Amadeus, AI, renderer incl. Unicode PDF, D1 repositories, API e2e, security, MFA/email verification, XLSX import) on real migrations over SQLite | pass |
+| `pnpm test` — 26 files, 227 tests (pricing, itinerary, optimiser, providers incl. Amadeus, AI, renderer incl. Unicode PDF, D1 repositories, API e2e, security, MFA/email verification, XLSX import, platform admin) on real migrations over SQLite | pass |
 | Migration 0006 applied with `wrangler d1 migrations apply --local` (real D1 runtime); `wrangler deploy --dry-run` bundles the Worker (4.7 MB, 1.6 MB gzip, within the 3 MB free-plan limit); `next build` passes | pass |
 | Sample Sinhala/Tamil/Cyrillic/Greek quotation PDF rendered with pdf.js and inspected by eye | pass (see below) |
 | `pnpm typecheck` (strict TS, all packages + API + web) | pass |
@@ -41,7 +43,8 @@ Admin routes shadowed all tenant routes; unused SQL parameter in `scope=own` lis
 - **Email**: outbox always written; delivery via Resend only when configured (untested against the live API).
 - **Turnstile**: server check and the browser widget are implemented, but the widget has only been type-checked and built, never shown against Cloudflare's real challenge (needs a site key).
 - **Auth** uses PBKDF2 at the Workers limit (100k). Optional TOTP MFA and email verification are implemented and tested, but MFA is per-user only (no organisation-wide enforcement, no WebAuthn/passkeys, no SSO), and email verification is only enforced when `REQUIRE_EMAIL_VERIFICATION=true` and a real email provider is configured (unverified in this environment: email delivery is untested against Resend). The MFA/verification UI has been type-checked and built but not clicked through in a browser.
-- **Reports** are operational (quotations, suppliers, AI usage); no cross-tenant platform analytics beyond `/admin/metrics`.
+- **Reports** are operational (quotations, suppliers, AI usage) inside a tenant. Platform-wide analytics live in the admin portal overview; there is no separate BI export feed.
+- **Support access is read-only.** Platform admins can manage organisations, users, subscriptions and platform settings, and can read grant-gated tenant content, but they cannot impersonate a tenant user or perform tenant workflow actions (create trips, send quotes). Add a membership if a human genuinely needs to operate inside a tenant.
 - **PDF** embeds Noto Sans (Latin, Greek, Cyrillic), Noto Sans Sinhala and Noto Sans Tamil when a quotation contains such text, with proper shaping and mark placement (verified visually for Sinhala, Tamil, Cyrillic and Greek). Other scripts (Arabic and other right-to-left scripts, Hebrew, Devanagari, CJK, emoji) still print as `?`. Sinhala and Tamil are regular weight only, so bold headings in those scripts are not bold.
 - XLSX import reads the first worksheet's cell values only (formulas use their cached result); it has been tested on generated workbooks, not on files saved by real Excel/LibreOffice/Google Sheets. Quote line-item sources are not exposed for prefill.
 - Several list endpoints return raw snake_case rows (history/approvals/admin metrics); UI handles them. Left as is: converting them means changing the API contract and every consumer for no functional gain.

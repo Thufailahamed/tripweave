@@ -2,7 +2,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Map, Plus, Search } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, CalendarDays, Map, MapPin, Plus, Search, Users } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingBlock, PageHeader, StatusBadge } from "@/components/ui/card";
@@ -21,6 +21,32 @@ const SORTS = [
   { value: "title", label: "Title" },
   { value: "status", label: "Status" },
 ];
+
+const initialsOf = (value: string) =>
+  value
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
+
+function FilterChip({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={
+        active
+          ? "rounded-full border border-foreground bg-foreground px-3 py-1.5 text-xs font-medium text-background"
+          : "rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground"
+      }
+    >
+      {children}
+    </button>
+  );
+}
 
 function TripsInner() {
   const router = useRouter();
@@ -67,29 +93,67 @@ function TripsInner() {
       {
         header: "Trip",
         enableSorting: false,
+        cell: ({ row }) => {
+          const t = row.original;
+          const destinations = t.parseResult?.parsed?.destinations ?? [];
+          return (
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-accent-soft text-[11px] font-semibold text-accent" aria-hidden>
+                {initialsOf(t.customerName || t.title)}
+              </span>
+              <div className="min-w-0">
+                <Link href={`/trips/${t.id}`} className="font-semibold text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
+                  {t.title}
+                </Link>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+                  <span>{t.customerName ?? "No customer"}</span>
+                  {destinations.length > 0 ? (
+                    <>
+                      <span aria-hidden>·</span>
+                      <span className="inline-flex items-center gap-1"><MapPin className="size-3" aria-hidden />{destinations.slice(0, 4).join(" · ")}</span>
+                    </>
+                  ) : null}
+                </p>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        header: "Dates",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const nights = row.original.arrivalDate && row.original.departureDate ? Math.max(0, Math.round((Date.parse(row.original.departureDate) - Date.parse(row.original.arrivalDate)) / 86_400_000)) : null;
+          return (
+            <div className="whitespace-nowrap">
+              <p className="tw-num">{dateRange(row.original.arrivalDate, row.original.departureDate)}</p>
+              {nights !== null ? <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays className="size-3" aria-hidden />{nights} night{nights === 1 ? "" : "s"}</p> : null}
+            </div>
+          );
+        },
+      },
+      {
+        header: "Guests",
+        enableSorting: false,
         cell: ({ row }) => (
-          <div className="min-w-0">
-            <Link href={`/trips/${row.original.id}`} className="font-semibold text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
-              {row.original.title}
-            </Link>
-            <p className="text-xs text-muted-foreground">{row.original.customerName ?? "No customer"}</p>
-          </div>
+          <span className="tw-num inline-flex items-center gap-1.5 whitespace-nowrap text-sm">
+            <Users className="size-3.5 text-muted-foreground" aria-hidden />
+            {row.original.party.adults + row.original.party.children}
+          </span>
         ),
       },
-      { header: "Dates", enableSorting: false, cell: ({ row }) => <span className="tw-num">{dateRange(row.original.arrivalDate, row.original.departureDate)}</span> },
-      { header: "Guests", enableSorting: false, cell: ({ row }) => <span className="tw-num">{row.original.party.adults + row.original.party.children}</span> },
       {
         header: "Budget",
         enableSorting: false,
         cell: ({ row }) => (
-          <span className="tw-num">
+          <span className="tw-num whitespace-nowrap">
             {row.original.budgetAmountMinor === null ? "—" : money(row.original.budgetAmountMinor, row.original.budgetCurrency)}
             {row.original.budgetAmountMinor !== null ? <span className="ml-1 text-xs text-muted-foreground">{row.original.budgetScope === "all_inclusive_trip" ? "whole trip" : "accommodation"}</span> : null}
           </span>
         ),
       },
       { header: "Status", enableSorting: false, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
-      { header: "Updated", enableSorting: false, cell: ({ row }) => <span className="tw-num text-muted-foreground">{formatDate(row.original.updatedAt)}</span> },
+      { header: "Updated", enableSorting: false, cell: ({ row }) => <span className="tw-num whitespace-nowrap text-muted-foreground">{formatDate(row.original.updatedAt)}</span> },
     ],
     [],
   );
@@ -104,23 +168,25 @@ function TripsInner() {
 
   return (
     <div>
-      <PageHeader title="Trip requests" description="Every enquiry from first message to won or lost." actions={newAction} icon={Map} image={IMAGES.flow} />
-      <form role="search" aria-label="Filter trips" className="tw-surface mb-4 grid gap-3 rounded-xl border border-border p-4 sm:grid-cols-2 lg:grid-cols-6" onSubmit={(e) => e.preventDefault()}>
+      <PageHeader title="Trip requests" description="Every enquiry from first message to won or lost." actions={newAction} icon={Map} image={IMAGES.hotels} />
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Quick view</span>
+        <FilterChip active={!status} onClick={() => setParams({ status: null })}>All</FilterChip>
+        {TRIP_STATUSES.map((s) => (
+          <FilterChip key={s} active={status === s} onClick={() => setParams({ status: s })}>{titleCase(s)}</FilterChip>
+        ))}
+        <span className="ml-auto text-xs text-muted-foreground">
+          {list.data ? `${list.data.meta.total} request${list.data.meta.total === 1 ? "" : "s"}` : "Loading…"}
+        </span>
+      </div>
+
+      <form role="search" aria-label="Filter trips" className="tw-surface mb-4 grid gap-3 rounded-2xl border border-border p-4 shadow-[0_14px_40px_-30px_rgba(20,26,45,0.3)] sm:grid-cols-2 lg:grid-cols-5" onSubmit={(e) => e.preventDefault()}>
         <Field label="Search" htmlFor="trip-q" className="lg:col-span-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input id="trip-q" className="pl-8" placeholder="Trip title or customer" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-        </Field>
-        <Field label="Status" htmlFor="trip-status">
-          <Select id="trip-status" value={status} onChange={(e) => setParams({ status: e.target.value })}>
-            <option value="">All statuses</option>
-            {TRIP_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {titleCase(s)}
-              </option>
-            ))}
-          </Select>
         </Field>
         <Field label="Arrival from" htmlFor="trip-from">
           <Input id="trip-from" type="date" value={from} onChange={(e) => setParams({ from: e.target.value })} />

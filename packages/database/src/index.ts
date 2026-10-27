@@ -1,4 +1,5 @@
 export * from "./db";
+export * as admin from "./repos/admin";
 export * as identity from "./repos/identity";
 export * as inventory from "./repos/inventory";
 export * as trips from "./repos/trips";

@@ -20,15 +20,25 @@ pnpm dev:web                                        # Next.js on http://localhos
 
 Sign in with `demo@tripweave.example` / `Demo-Passw0rd1` (seed data, development only) or register a new organisation.
 
+The platform admin portal lives at `/admin`. Promote an account locally (never share this SQL with an environment you do not control):
+
+```bash
+pnpm --filter @tripweave/api exec wrangler d1 execute tripweave --local --persist-to ../../.wrangler/state \
+  --command "UPDATE users SET platform_role='platform_admin' WHERE email='demo@tripweave.example'"
+```
+
+See [docs/admin-portal.md](docs/admin-portal.md) for the full portal, security model and settings enforcement.
+
 - Workers AI has no local emulation, so local requirement extraction uses the deterministic rule parser (clearly labelled "rules" in the UI). Test Workers AI with `wrangler dev --remote`.
 - Without Hotelbeds or Amadeus credentials only company-managed inventory is searched (for local runs set `HOTEL_EXTERNAL_PROVIDER=hotelbeds,amadeus` in `.dev.vars` alongside the keys); enable the labelled mock provider in *Settings → Integrations* to see supplier-failure handling.
 
 ## Verify
 
 ```bash
-pnpm test                    # 165 unit/integration/e2e tests (real migrations on SQLite, no live suppliers)
+pnpm test                    # 227 unit/integration/e2e tests (real migrations on SQLite, no live suppliers)
 pnpm typecheck               # all packages, API and web
 node scripts/ui-smoke.mjs     # headless-Chromium UI smoke (needs playwright-core + a running web app and the seeded API)
+node scripts/admin-ui-smoke.mjs # headless-Chromium pass over every platform-admin section (requires a seeded admin)
 node scripts/smoke.mjs       # end-to-end against a RUNNING API (local or deployed): register → hotels → optimise (Queue→Workflow) → quote → public link → PDF
 ```
 
@@ -36,6 +46,7 @@ node scripts/smoke.mjs       # end-to-end against a RUNNING API (local or deploy
 | | |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Components, flows, decisions and known limitations |
+| [docs/admin-portal.md](docs/admin-portal.md) | Platform admin portal: sections, security model, settings enforcement and API |
 | [docs/deployment.md](docs/deployment.md) | Cloudflare resources, secrets, migrations, environments, verification checklist |
 | [docs/pricing.md](docs/pricing.md) | Margin/markup maths, FX, rate precedence |
 | [docs/security.md](docs/security.md) | Auth, tenancy, public links, edge configuration, gaps |

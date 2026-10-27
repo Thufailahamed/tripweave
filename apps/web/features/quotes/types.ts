@@ -153,6 +153,15 @@ export interface ShareRow {
   createdAt: string;
 }
 
+export interface BookingConfirmationView {
+  id: string;
+  reference: string;
+  status: "confirmed" | "failed";
+  checkedAt: string;
+  validUntil: string | null;
+  checks: { stopId: string; offerId: string; propertyName?: string; status: string; message?: string }[];
+}
+
 export interface QuoteDetailResponse {
   quote: QuoteSummary;
   version: VersionDetail;
@@ -161,6 +170,7 @@ export interface QuoteDetailResponse {
   approvals: ApprovalRow[];
   shares: ShareRow[];
   acceptances: AcceptanceRow[];
+  bookingConfirmation: BookingConfirmationView | null;
   canApprove: boolean;
   awaitingApproval: boolean;
 }

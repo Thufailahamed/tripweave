@@ -11,6 +11,7 @@ export type ErrorCode =
   | "unprocessable"
   | "provider_error"
   | "ai_unavailable"
+  | "maintenance"
   | "internal_error";
 
 const STATUS: Record<ErrorCode, number> = {
@@ -26,6 +27,7 @@ const STATUS: Record<ErrorCode, number> = {
   unprocessable: 422,
   provider_error: 502,
   ai_unavailable: 503,
+  maintenance: 503,
   internal_error: 500,
 };
 

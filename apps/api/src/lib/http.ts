@@ -5,7 +5,7 @@ import type { Env, Vars } from "../env";
 
 export type AppContext = Context<{ Bindings: Env; Variables: Vars }>;
 
-export function ok<T>(c: AppContext, data: T, status: 200 | 201 = 200) {
+export function ok<T>(c: AppContext, data: T, status: 200 | 201 | 202 = 200) {
   return c.json({ data }, status);
 }
 

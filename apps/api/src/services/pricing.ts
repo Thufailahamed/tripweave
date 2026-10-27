@@ -8,6 +8,8 @@ export interface StoredPackage extends Record<string, unknown> {
   totalCostMinor: number;
   selections: { stopId: string; destination: string; costMinor: number; offer: NormalisedOffer; metrics: unknown }[];
   stops?: unknown[];
+  unverified?: string[];
+  explanation?: string[];
 }
 
 export function selectionLines(pkg: StoredPackage): CostLine[] {
@@ -45,6 +47,12 @@ export function presentPackage(rec: trips.PackageRecord, rights: ViewerRights, p
   const visiblePkg = rights.canSeeMargins
     ? pkg
     : { ...pkg, totalCostMinor: undefined, costPerNightMinor: undefined, explanation: redactExplanation((pkg as unknown as { explanation: string[] }).explanation ?? []) };
+  const rawVerification = rec.verification as { checks?: { previousTotalMinor?: number; currentTotalMinor?: number | null; [key: string]: unknown }[]; [key: string]: unknown };
+  const verification = rights.canSeeMargins
+    ? rawVerification
+    : Object.keys(rawVerification).length > 0
+      ? { ...rawVerification, checks: rawVerification.checks?.map(({ previousTotalMinor: _previous, currentTotalMinor: _current, ...check }) => check) }
+      : rawVerification;
   return {
     id: rec.id,
     jobId: rec.jobId,
@@ -54,6 +62,7 @@ export function presentPackage(rec: trips.PackageRecord, rights: ViewerRights, p
     manuallyModified: rec.manuallyModified,
     feasibility: rec.feasibility,
     createdAt: rec.createdAt,
+    verification,
     package: { ...visiblePkg, selections },
     pricing: pricing
       ? {

@@ -42,6 +42,8 @@ Boundaries: the frontend calls the API through typed fetch helpers; routes valid
 
 **Quotation.** A package becomes `quote_versions` snapshots (itinerary, package with supplier offers, full pricing result, FX snapshot, terms). Versions are immutable; shares are bound to a version; the public client view is produced by an allow-list (`toClientView`) so internal costs, suppliers, contracts and notes cannot leak.
 
+**Platform administration.** `/admin` is a separate portal for `platform_role = 'platform_admin'` users. It manages organisations, users/memberships, subscriptions, optimisation jobs, email delivery, announcements and platform-wide audit/provider telemetry. Tenant business content remains grant-gated: reads require an unexpired, reason-bound `platform_access_grants` row, are audited, and audit metadata is redacted without one. Platform settings (`platform_settings`) enforce sign-up availability, maintenance mode and default plan limits in the API. See `docs/admin-portal.md`.
+
 ## Data model notes
 - Money: integer minor units; supplier currency and amount are always preserved next to converted values; margins in basis points.
 - Dates: calendar dates `YYYY-MM-DD` (never timezone-shifted); timestamps UTC ISO strings.

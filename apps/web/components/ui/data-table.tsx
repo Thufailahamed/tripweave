@@ -25,18 +25,18 @@ export function DataTable<T>({ data, columns, empty, onRowClick, meta, onPageCha
   const table = useReactTable({ data, columns, state: { sorting }, onSortingChange: setSorting, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() });
   if (data.length === 0) return <>{empty ?? <EmptyState title="Nothing here yet" />}</>;
   return (
-    <div className="tw-surface overflow-hidden rounded-xl border border-border">
+    <div className="tw-surface overflow-hidden rounded-2xl border border-border shadow-[0_18px_50px_-34px_rgba(20,26,45,0.28)]">
       <div className="relative overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           {caption ? <caption className="sr-only">{caption}</caption> : null}
-          <thead className="border-b border-border bg-background/30">
+          <thead className="border-b border-border bg-muted/35">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((h) => {
                   const sortable = h.column.getCanSort();
                   const dir = h.column.getIsSorted();
                   return (
-                    <th key={h.id} scope="col" aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none"} className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-medium text-muted-foreground">
+                    <th key={h.id} scope="col" aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none"} className="whitespace-nowrap px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       {h.isPlaceholder ? null : sortable ? (
                         <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={h.column.getToggleSortingHandler()}>
                           {flexRender(h.column.columnDef.header, h.getContext())}
@@ -59,10 +59,10 @@ export function DataTable<T>({ data, columns, empty, onRowClick, meta, onPageCha
                 onClick={onRowClick ? () => onRowClick(row.original) : undefined}
                 onKeyDown={onRowClick ? (e) => (e.key === "Enter" ? onRowClick(row.original) : undefined) : undefined}
                 style={{ "--i": Math.min(ri, 12) } as React.CSSProperties}
-                className={cn("tw-row-in border-t border-border transition-colors first:border-t-0 hover:bg-foreground/[0.025]", onRowClick && "cursor-pointer hover:bg-primary-soft/50 hover:shadow-[inset_2px_0_0_var(--accent)] focus-visible:bg-primary-soft/50 focus-visible:shadow-[inset_2px_0_0_var(--accent)]")}
+                className={cn("tw-row-in border-t border-border transition-colors first:border-t-0 hover:bg-accent/[0.035]", onRowClick && "cursor-pointer hover:bg-accent/[0.045] hover:shadow-[inset_2px_0_0_var(--accent)] focus-visible:bg-accent/[0.045] focus-visible:shadow-[inset_2px_0_0_var(--accent)]")}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className={cn("px-5 align-middle", dense ? "py-2.5" : "py-3.5")}>
+                  <td key={cell.id} className={cn("px-5 align-middle", dense ? "py-2.5" : "py-4")}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}

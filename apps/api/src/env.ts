@@ -24,6 +24,8 @@ export interface Env {
   COOKIE_SECURE?: string;
   AI_MODEL?: string;
   ROUTING_PROVIDER?: string;
+  /** Minutes a live supplier price check remains quotable; defaults to 15. */
+  PRICE_VALIDITY_MINUTES?: string;
   /** Comma-separated external suppliers the platform allows, e.g. "hotelbeds,amadeus"; "none" disables all. */
   HOTEL_EXTERNAL_PROVIDER?: string;
   ENABLE_MOCK_PROVIDER?: string;

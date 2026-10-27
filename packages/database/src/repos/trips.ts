@@ -237,6 +237,20 @@ export async function getPackage(db: Db, orgId: string, id: string): Promise<Pac
   const r = await queryOne(db, "SELECT * FROM candidate_combinations WHERE id = ? AND organization_id = ?", [id, orgId]);
   return r ? mapPackage(r) : null;
 }
+/** Persists a live-price validation result and any repriced selection costs. */
+export async function updatePackageValidation(
+  db: Db,
+  orgId: string,
+  id: string,
+  i: { packageJson: unknown; totalCostMinor: number; verification: unknown; items: { stopId: string; costMinor: number }[] },
+): Promise<boolean> {
+  const statements = [
+    stmt(db, "UPDATE candidate_combinations SET package_json = ?, estimated_cost_minor_units = ?, verification_summary_json = ? WHERE id = ? AND organization_id = ?", [toJson(i.packageJson), i.totalCostMinor, toJson(i.verification), id, orgId]),
+    ...i.items.map((it) => stmt(db, "UPDATE candidate_combination_items SET cost_minor_units = ? WHERE combination_id = ? AND stop_id = ?", [it.costMinor, id, it.stopId])),
+  ];
+  await batch(db, statements);
+  return true;
+}
 export async function listJobPackages(db: Db, orgId: string, jobId: string): Promise<PackageRecord[]> {
   return (await query(db, "SELECT * FROM candidate_combinations WHERE organization_id = ? AND optimisation_job_id = ? ORDER BY manually_modified, combination_number, created_at", [orgId, jobId])).map(mapPackage);
 }

@@ -412,5 +412,5 @@ export async function createAccessGrant(db: Db, g: { platformUserId: string; org
   return id;
 }
 export async function hasActiveAccessGrant(db: Db, platformUserId: string, organizationId: string): Promise<boolean> {
-  return !!(await queryOne(db, "SELECT 1 AS x FROM platform_access_grants WHERE platform_user_id = ? AND organization_id = ? AND expires_at > ?", [platformUserId, organizationId, nowIso()]));
+  return !!(await queryOne(db, "SELECT 1 AS x FROM platform_access_grants WHERE platform_user_id = ? AND organization_id = ? AND revoked_at IS NULL AND expires_at > ?", [platformUserId, organizationId, nowIso()]));
 }

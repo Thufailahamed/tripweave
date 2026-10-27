@@ -8,6 +8,8 @@ ENVIRONMENT=development
 # Google Hotels (Booking.com, Expedia, Agoda, Hotels.com) via SerpApi:
 # SERPAPI_API_KEY=
 # Also include google_hotels in HOTEL_EXTERNAL_PROVIDER and enable it in Settings → Integrations.
+# Optional: minutes a live supplier price check remains quotable (default 15).
+# PRICE_VALIDITY_MINUTES=15
 # OpenStreetMap discovery is controlled by HOTEL_DISCOVERY=true in wrangler.jsonc.
 # Set OSM_CONTACT_EMAIL to a real contact address in production (used in the User-Agent).
 # GOOGLE_MAPS_API_KEY=

@@ -9,7 +9,7 @@ type IconType = React.ComponentType<{ className?: string; strokeWidth?: number }
 
 /** `interactive` cards lift and brighten their border on hover; the icon tile inside tilts with them. */
 export function Card({ className, interactive, ...props }: React.HTMLAttributes<HTMLDivElement> & { interactive?: boolean }) {
-  return <div className={cn("tw-surface rounded-xl border border-border text-card-foreground", interactive && "tw-lift group", className)} {...props} />;
+  return <div className={cn("tw-surface rounded-2xl border border-border text-card-foreground", interactive && "tw-lift group", className)} {...props} />;
 }
 export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("flex flex-col gap-1 border-b border-border px-6 py-5", className)} {...props} />;
@@ -199,7 +199,7 @@ export function Stat({ label, value, hint, tone, bare, className, icon, iconTone
 
 /** Hairline grid of bare Stats (one shared border, 1px dividers). */
 export function StatGrid({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <div className={cn("grid gap-px overflow-hidden rounded-xl border border-border bg-border", className)}>{children}</div>;
+  return <div className={cn("grid gap-px overflow-hidden rounded-2xl border border-border bg-border", className)}>{children}</div>;
 }
 
 /**
@@ -229,11 +229,14 @@ export function PageHeader({ title, description, actions, eyebrow, icon, image }
 
   if (image) {
     return (
-      <div className="group tw-surface relative isolate mb-8 flex flex-wrap items-end justify-between gap-x-6 gap-y-5 overflow-hidden rounded-2xl border border-border p-6 md:p-8">
+      <div className="group tw-surface relative isolate mb-8 flex min-h-[200px] flex-wrap items-end justify-between gap-x-6 gap-y-5 overflow-hidden rounded-[24px] border border-border p-6 shadow-[0_18px_50px_-30px_rgba(20,26,45,0.35)] md:p-9">
         <div aria-hidden className="absolute inset-0 -z-20 overflow-hidden">
-          <Photo image={image} decorative priority sizes="(min-width: 1400px) 1400px, 100vw" className="size-full opacity-55 transition-transform duration-[1800ms] ease-out group-hover:scale-[1.04]" />
+          <Photo image={image} decorative priority sizes="(min-width: 1400px) 1400px, 100vw" className="size-full object-cover object-[center_55%] opacity-80 transition-transform duration-[1800ms] ease-out group-hover:scale-[1.04]" />
         </div>
-        <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-r from-card via-card/85 to-card/30" />
+        <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-r from-card via-card/85 to-card/20" />
+        <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(70%_120%_at_88%_0%,color-mix(in_oklab,var(--accent)_16%,transparent),transparent_62%)]" />
+        <div aria-hidden className="absolute inset-x-0 bottom-0 -z-10 h-24 bg-gradient-to-t from-card/75 to-transparent" />
+        <span aria-hidden className="absolute inset-x-6 bottom-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent opacity-70" />
         {heading}
         {actionRow}
       </div>

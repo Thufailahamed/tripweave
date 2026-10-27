@@ -10,6 +10,7 @@ import { ok, parseBody, parseQuery, requireParam, type AppContext } from "../lib
 import { audit, can, getTenant, rateLimit, requirePermission, requireTenant } from "../middleware/auth";
 import { createOptimisationJob, dbOfferId, dispatchJob, loadJobSearchInput, persistOffers, recheckOffer, toNewPackage, type PipelineCtx } from "../services/optimisation";
 import { presentPackage, priceStoredPackage, redactOfferCosts, type StoredPackage } from "../services/pricing";
+import { validatePackagePrices, PRICE_VALIDITY_MINUTES } from "../services/price-validation";
 import { sellFromCost } from "@tripweave/pricing-engine";
 import { enabledExternalProviders, loadIntegrations, loadPricing, requireFx } from "../services/settings";
 
@@ -84,6 +85,11 @@ async function presentList(c: AppContext, records: trips.PackageRecord[]) {
   const db = c.get("db");
   const pricing = await loadPricing(db, a.organizationId);
   const rights = { canSeeMargins: a.permissions.has("margins:view"), canSeeContracts: a.permissions.has("agreements:manage") };
+  const propertyIds = records.flatMap((r) => {
+    const pkg = r.package as unknown as StoredPackage;
+    return pkg.selections.map((s) => s.offer.property.id);
+  });
+  const coverImages = await inventory.firstImagesFor(db, [...new Set(propertyIds)]);
   return Promise.all(
     records.map(async (r) => {
       let priced = null;
@@ -94,7 +100,14 @@ async function presentList(c: AppContext, records: trips.PackageRecord[]) {
       } catch {
         priced = null; // surfaced to the UI as "pricing unavailable"; the cost data is still shown
       }
-      return presentPackage(r, rights, priced);
+      const shown = presentPackage(r, rights, priced);
+      return {
+        ...shown,
+        package: {
+          ...shown.package,
+          selections: shown.package.selections.map((s) => ({ ...s, coverImageId: coverImages.get(s.offer.property.id) ?? null })),
+        },
+      };
     }),
   );
 }
@@ -198,8 +211,13 @@ optimisationRoutes.post("/packages/:id/reprice", requirePermission("packages:wri
   const ctx = await loadJobSearchInput(pctx(c), a.organizationId, rec.jobId, refreshed);
   const result = evaluateSelection(ctx.input, offersByStop, rec.objective as never);
   if (!result.package) throw new AppError("unprocessable", "The package can no longer be priced: one or more hotels are no longer valid.", { violations: result.violations, changes });
-  const [id] = await trips.insertPackages(db, a.organizationId, [toNewPackage(rec.jobId, await trips.nextCombinationNumber(db, rec.jobId), result.package, ctx.stops, { parentId: rec.id, manuallyModified: rec.manuallyModified, verification: { unverified: result.package.unverified, rechecked: recheck, changes } })]);
-  await audit(c, "package.repriced", "package", id ?? null, { from: rec.id, recheck, ok: result.ok });
+  const now = c.get("deps").now();
+  const allVerified = recheck && changes.every((x) => x.status === "confirmed" || x.status === "price_changed");
+  const verification = recheck
+    ? { status: allVerified ? "verified" : "failed", allVerified, checkedAt: now.toISOString(), validUntil: allVerified ? new Date(now.getTime() + PRICE_VALIDITY_MINUTES * 60_000).toISOString() : null, changes }
+    : { unverified: result.package.unverified, rechecked: false };
+  const [id] = await trips.insertPackages(db, a.organizationId, [toNewPackage(rec.jobId, await trips.nextCombinationNumber(db, rec.jobId), result.package, ctx.stops, { parentId: rec.id, manuallyModified: rec.manuallyModified, verification })]);
+  await audit(c, "package.repriced", "package", id ?? null, { from: rec.id, recheck, ok: result.ok, allVerified });
   const saved = await trips.getPackage(db, a.organizationId, id!);
   const margins = can(c, "margins:view");
   return ok(c, {
@@ -208,6 +226,19 @@ optimisationRoutes.post("/packages/:id/reprice", requirePermission("packages:wri
     valid: result.ok, violations: result.violations,
     previousTotalMinor: margins ? rec.totalCostMinor : undefined, newTotalMinor: margins ? result.package.totalCostMinor : undefined,
   }, 201);
+});
+
+optimisationRoutes.post("/packages/:id/validate", requirePermission("packages:write"), rateLimit({ name: "validate-package", limit: 120, windowSeconds: 3600, by: "user" }), async (c) => {
+  const a = getTenant(c);
+  const id = requireParam(c, "id");
+  const result = await validatePackagePrices(pctx(c), a.organizationId, id, { validityMinutes: Number(c.env.PRICE_VALIDITY_MINUTES ?? 15) });
+  await audit(c, "package.price_validated", "package", id, { status: result.verification.status, allVerified: result.verification.allVerified, changed: result.changed });
+  const [shown] = await presentList(c, [result.rec]);
+  const margins = can(c, "margins:view");
+  const verification = margins
+    ? result.verification
+    : { ...result.verification, checks: result.verification.checks.map(({ previousTotalMinor: _previous, currentTotalMinor: _current, ...check }) => check) };
+  return ok(c, { package: shown, verification, changed: result.changed });
 });
 
 optimisationRoutes.post("/packages/:id/explain", requirePermission("packages:write"), async (c) => {

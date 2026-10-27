@@ -271,16 +271,80 @@ rejected 54, 55 and 57 offers respectively on meal plan and accepted 5 per stop;
 board basis entered a strict package. Google provider search latency including enrichment was
 5.1–6.4 s per stop; OSM discovery was 2.8–9.4 s; all provider outcomes were `ok`.
 
+## Live price validation and quote gate (28 Oct 2026)
+
+External prices are no longer quote-grade just because a search returned them.
+
+- `POST /packages/:id/validate` re-checks every external hotel in the package. Non-strict Google
+  offers use the SerpApi property-details endpoint; strict breakfast offers use a fresh entity-page
+  rate because property details do not expose a rate-level board basis. Internal contract rates are
+  marked `not_required`.
+- A package is updated only when every external check returns `confirmed` or `price_changed`. A
+  partial failure records `verification.status = "failed"` and leaves the old package prices
+  untouched.
+- A successful check records `allVerified`, `checkedAt` and `validUntil` (15 minutes by default,
+  configurable with `PRICE_VALIDITY_MINUTES`). Google offers get `verificationStatus: "live_checked"`
+  and the same expiry.
+- Quote creation rejects any package with an external rate that is not fresh and live-checked.
+  Quote versions created from a package apply the same gate. Sending an existing quote still
+  enforces each offer's expiry, so a quote built from a 15-minute live check must be sent within
+  that window or revalidated into a new version.
+- The “Re-price with live check” flow records the same verification summary, so a repriced package
+  can be quoted immediately.
+- Google Hotels discovery responses are cached in KV for 15 minutes, keyed by destination, stay,
+  occupancy, currency, `gl` and `hl`. Cached offers are marked `priceCache.cached`; quote checks
+  always bypass the cache and fetch live data.
+- The fetch stage saves `fetchedStops` after each stop. A retry resumes at the first unfinished stop
+  instead of paying for completed destination searches again.
+- The property-details endpoint returns only a headline rate for strict-breakfast cases, so the
+  entity verifier remains required for a confirmed breakfast rate. If the verifier is disabled or
+  unavailable, strict Google offers cannot be quoted.
+
+Live verification on the sample trip:
+
+- `POST /packages/bed0e239-.../validate` returned `verified`, `allVerified: true`, three confirmed
+  strict-breakfast rates, and `validUntil` 15 minutes later.
+- A quote attempt before validation returned 422 with the live-check problem; the same package
+  produced `Q-2026-0002` after validation.
+- The existing re-price-with-live-check path produced a verified package and `Q-2026-0003`.
+- A repeated hotel search hit the KV cache on all 17 Google offers; Google provider latency dropped
+  from 9.5 s to 1 ms on the second call.
+
+## Booking-time confirmation (28 Oct 2026)
+
+An accepted quotation can be confirmed immediately before booking via `POST /quotes/:id/confirm-booking`.
+
+- The endpoint re-checks every external hotel on the quote version's package against its live
+  supplier rate. Internal contract rates are marked `not_required`.
+- It only confirms when every external rate is still `confirmed` at exactly the quoted total. A
+  changed or unavailable rate produces a failed confirmation and a list of affected hotels; the
+  issued quote version is never mutated, so a new quotation is required at the new price.
+- A successful confirmation records a `booking_confirmations` row with a unique reference,
+  `checked_at`, a short `valid_until` window (15 minutes by default) and the full check list.
+- The quote detail page shows a **Confirm live prices for booking** card for accepted quotes, the latest
+  reference, the validity window and any failed checks.
+- This is a pre-booking price/availability confirmation, not a supplier reservation. Actual booking
+  still requires bookable inventory (Hotelbeds/RateHawk) and their booking credentials; the endpoint
+  deliberately does not pretend that a Google Hotels price is a reservation.
+
+Live verification:
+
+- Quote `Q-2026-0002` was sent and accepted.
+- `POST /quotes/<id>/confirm-booking` returned `allConfirmed: true` for all three hotels and created
+  reference `BC-Q-2026-0002-v1-39B6DC0A`, valid for 15 minutes.
+- Re-confirming created `BC-Q-2026-0002-v1-68A5A01C`; both confirmations recorded the three unchanged
+  live rates.
+
 ## Verification
 
 - `node --test scripts/google-hotels-direct.test.mjs` — 6/6 passing.
-- `pnpm test` — 199/199 passing across 19 files, including 10 entity/encoder/fetch tests, 5 provider
-  enrichment tests and the strict-breakfast policy tests.
+- `pnpm test` — 227/227 passing across 26 files.
 - `pnpm typecheck` — clean across all workspaces.
 - Live comparison: 9 search runs (3 per stop) and 22 fresh entity fetches, 0 failures; per-entity
   median 787 ms, p95 1,045 ms.
 - Live strict pilot: 15/15 enriched entity fetches succeeded; 0 provider failures; all five packages
   feasible and within budget.
+- Live quote gate: unvalidated package rejected; validated package quoted; cache hit verified.
 - Known pilot gates still open: legal sign-off on scraping, two-week live measurement, and rotation
   of the SerpApi key used during testing.
 

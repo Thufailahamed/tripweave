@@ -109,6 +109,36 @@ export async function listVersionSummaries(db: Db, quoteId: string): Promise<{ v
   return (await query(db, "SELECT version_number, selling_price_minor_units, total_cost_minor_units, gross_margin_basis_points, approval_required, approved_at, created_at FROM quote_versions WHERE quote_id = ? ORDER BY version_number DESC", [quoteId])).map((r) => ({ versionNumber: num(r.version_number), sellingPriceMinor: num(r.selling_price_minor_units), totalCostMinor: num(r.total_cost_minor_units), grossMarginBp: num(r.gross_margin_basis_points), approvalRequired: num(r.approval_required) === 1, approvedAt: strOrNull(r.approved_at), createdAt: str(r.created_at) }));
 }
 
+export interface BookingConfirmationRecord {
+  id: string; organizationId: string; quoteId: string; quoteVersion: number; reference: string;
+  status: "confirmed" | "failed"; checkedAt: string; validUntil: string | null; currency: string;
+  totalCostMinor: number; checks: unknown[]; createdBy: string | null; createdAt: string;
+}
+const mapBookingConfirmation = (r: Row): BookingConfirmationRecord => ({
+  id: str(r.id), organizationId: str(r.organization_id), quoteId: str(r.quote_id), quoteVersion: num(r.quote_version),
+  reference: str(r.reference), status: str(r.status) as "confirmed" | "failed", checkedAt: str(r.checked_at),
+  validUntil: strOrNull(r.valid_until), currency: str(r.currency), totalCostMinor: num(r.total_cost_minor_units),
+  checks: parseJson(r.checks_json, []), createdBy: strOrNull(r.created_by), createdAt: str(r.created_at),
+});
+export async function createBookingConfirmation(
+  db: Db,
+  orgId: string,
+  i: { quoteId: string; quoteVersion: number; reference: string; status: "confirmed" | "failed"; checkedAt: string; validUntil: string | null; currency: string; totalCostMinor: number; checks: unknown; createdBy: string | null },
+): Promise<BookingConfirmationRecord> {
+  const id = newId();
+  const createdAt = nowIso();
+  await execute(
+    db,
+    "INSERT INTO booking_confirmations (id,organization_id,quote_id,quote_version,reference,status,checked_at,valid_until,currency,total_cost_minor_units,checks_json,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    [id, orgId, i.quoteId, i.quoteVersion, i.reference, i.status, i.checkedAt, i.validUntil, i.currency, i.totalCostMinor, toJson(i.checks), i.createdBy, createdAt],
+  );
+  return { id, organizationId: orgId, quoteId: i.quoteId, quoteVersion: i.quoteVersion, reference: i.reference, status: i.status, checkedAt: i.checkedAt, validUntil: i.validUntil, currency: i.currency, totalCostMinor: i.totalCostMinor, checks: i.checks as unknown[], createdBy: i.createdBy, createdAt };
+}
+export async function latestBookingConfirmation(db: Db, orgId: string, quoteId: string, version: number): Promise<BookingConfirmationRecord | null> {
+  const r = await queryOne(db, "SELECT * FROM booking_confirmations WHERE organization_id = ? AND quote_id = ? AND quote_version = ? ORDER BY created_at DESC LIMIT 1", [orgId, quoteId, version]);
+  return r ? mapBookingConfirmation(r) : null;
+}
+
 export async function setQuoteStatus(db: Db, orgId: string, quoteId: string, from: QuoteStatus, to: QuoteStatus, userId: string | null, note?: string): Promise<boolean> {
   const results = await batch(db, [
     stmt(db, "UPDATE quotes SET status = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND status = ?", [to, nowIso(), quoteId, orgId, from]),

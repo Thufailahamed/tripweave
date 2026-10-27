@@ -6,8 +6,9 @@ import {
   GoogleHotelsDirectError,
   type GoogleHotelsEntity,
 } from "./google-hotels-direct";
-import { ProviderError, type HotelAvailabilityInput, type HotelProvider, type HotelSearchInput, type PriceCheckInput, type PriceCheckResult, type PropertySearchResult, type RoomOffer } from "./types";
+import { ProviderError, type HotelAvailabilityInput, type HotelProvider, type HotelSearchCache, type HotelSearchInput, type PriceCheckInput, type PriceCheckResult, type PropertySearchResult, type RoomOffer } from "./types";
 import { normalizeHotelName } from "./discovery";
+import { chooseGoogleLiveRate, parseGooglePropertyRates } from "./google-hotels-recheck";
 
 export const GOOGLE_HOTELS_PROVIDER_KEY = "google_hotels";
 
@@ -46,6 +47,10 @@ export interface GoogleHotelsConfig {
   gl?: string;
   hl?: string;
   direct?: GoogleHotelsDirectConfig;
+  /** Short-lived discovery cache. Live rechecks always bypass it. */
+  cache?: HotelSearchCache;
+  /** Discovery cache TTL; defaults to 15 minutes. */
+  cacheTtlSeconds?: number;
 }
 
 interface GoogleMoney {
@@ -81,6 +86,13 @@ interface GoogleProperty {
 interface GoogleHotelsResponse {
   properties?: GoogleProperty[];
   error?: string;
+}
+
+interface GooglePropertyDetailsResponse {
+  error?: string;
+  property_token?: string;
+  featured_prices?: unknown[];
+  prices?: unknown[];
 }
 
 const STAR_CATEGORY: Record<number, HotelCategory> = { 1: "budget", 2: "budget", 3: "comfort", 4: "premium", 5: "luxury" };
@@ -144,7 +156,7 @@ export interface GooglePriceChoice {
 }
 
 /** Google Hotels has no room-count parameter: query the largest room and scale by room count. */
-function perRoomOccupancy(input: HotelSearchInput) {
+function perRoomOccupancy(input: Pick<HotelSearchInput, "party">) {
   const roomCount = Math.max(1, input.party.rooms.length);
   return input.party.rooms.reduce(
     (best, r) => (r.adults + r.children > best.adults + best.children ? r : best),
@@ -252,6 +264,39 @@ export class GoogleHotelsProvider implements HotelProvider {
     return res.properties;
   }
 
+  /** Fetches the live property-details page for one hotel and normalises its seller/room rates. */
+  private async fetchPropertyDetails(offer: NormalisedOffer, input: PriceCheckInput) {
+    const token = typeof offer.providerMetadata?.propertyToken === "string" ? offer.providerMetadata.propertyToken : null;
+    if (!token) return null;
+    const perRoom = perRoomOccupancy({ party: input.party });
+    const q = new URLSearchParams({
+      engine: "google_hotels",
+      property_token: token,
+      check_in_date: offer.stayStart,
+      check_out_date: offer.stayEnd,
+      adults: String(perRoom.adults),
+      children: String(perRoom.children),
+      currency: offer.currency,
+      hl: this.cfg.hl ?? "en",
+      gl: this.cfg.gl ?? "us",
+      api_key: this.cfg.apiKey,
+    });
+    if (perRoom.children > 0) {
+      const ages = perRoom.childAges ?? [];
+      const filled = Array.from({ length: perRoom.children }, (_, i) => ages[i] ?? 8);
+      q.set("children_ages", filled.join(","));
+    }
+    const res = await fetchJson<GooglePropertyDetailsResponse>(
+      this.key,
+      this.fetchImpl,
+      `${this.cfg.baseUrl ?? "https://serpapi.com/search.json"}?${q.toString()}`,
+      { headers: { Accept: "application/json" } },
+      this.cfg.timeoutMs ?? 15_000,
+    );
+    if (res?.error) throw new ProviderError(this.key, "upstream", `Google Hotels property check failed: ${res.error}`);
+    return parseGooglePropertyRates(res, { rooms: Math.max(1, offer.roomsRequired) });
+  }
+
   private toProperty(p: GoogleProperty, destination: string): PropertySearchResult {
     const stars = p.extracted_hotel_class;
     return {
@@ -275,6 +320,21 @@ export class GoogleHotelsProvider implements HotelProvider {
   }
 
   async getAvailability(input: HotelAvailabilityInput): Promise<RoomOffer[]> {
+    const cacheTtlSeconds = Math.max(0, this.cfg.cacheTtlSeconds ?? 15 * 60);
+    const cacheKey = this.cfg.cache && !input.propertyIds?.length ? this.searchCacheKey(input) : null;
+    const now = this.cfg.now?.() ?? new Date();
+    if (this.cfg.cache && cacheKey && cacheTtlSeconds > 0) {
+      const hit = await this.cfg.cache.get(cacheKey).catch(() => null);
+      if (hit && Date.parse(hit.cachedAt) + cacheTtlSeconds * 1_000 > now.getTime()) {
+        const expiresAt = new Date(Date.parse(hit.cachedAt) + cacheTtlSeconds * 1_000).toISOString();
+        return hit.offers.map((offer) => ({
+          ...offer,
+          expiresAt,
+          providerMetadata: { ...(offer.providerMetadata ?? {}), priceCache: { cached: true, cachedAt: hit.cachedAt } },
+        }));
+      }
+    }
+
     const props = await this.fetchProperties(input);
     const nights = nightsBetween(input.checkIn, input.checkOut);
     const rooms = Math.max(1, input.party.rooms.length);
@@ -339,7 +399,28 @@ export class GoogleHotelsProvider implements HotelProvider {
         isMock: false,
       });
     }
-    return this.cfg.direct?.enabled ? this.enrichOffers(offers, input) : offers;
+    const finalOffers = this.cfg.direct?.enabled ? await this.enrichOffers(offers, input) : offers;
+    if (this.cfg.cache && cacheKey && cacheTtlSeconds > 0) {
+      await this.cfg.cache.set(cacheKey, { offers: finalOffers, cachedAt: retrievedAt }, cacheTtlSeconds).catch(() => undefined);
+    }
+    return finalOffers;
+  }
+
+  private searchCacheKey(input: HotelAvailabilityInput): string {
+    const perRoom = perRoomOccupancy(input);
+    return [
+      GOOGLE_HOTELS_PROVIDER_KEY,
+      input.destination.trim().toLowerCase(),
+      input.checkIn,
+      input.checkOut,
+      Math.max(1, input.party.rooms.length),
+      perRoom.adults,
+      perRoom.children,
+      (perRoom.childAges ?? []).join(","),
+      input.currency ?? "USD",
+      this.cfg.gl ?? "us",
+      this.cfg.hl ?? "en",
+    ].join("|");
   }
 
   /**
@@ -461,13 +542,133 @@ export class GoogleHotelsProvider implements HotelProvider {
   }
 
   async recheckPrice(input: PriceCheckInput): Promise<PriceCheckResult> {
+    const offer = input.offer;
+    const checkedAt = this.nowIso();
+    const token = typeof offer.providerMetadata?.propertyToken === "string" ? offer.providerMetadata.propertyToken : null;
+    if (!token) {
+      return {
+        status: "not_supported",
+        offer,
+        previousTotalMinor: offer.totalAmountMinor,
+        currentTotalMinor: offer.totalAmountMinor,
+        message: "This Google Hotels offer has no property token to re-check.",
+        checkedAt,
+      };
+    }
+
+    const perRoom = perRoomOccupancy({ party: input.party });
+    const partySize = Math.max(1, perRoom.adults + perRoom.children);
+    const requiresBreakfast = offer.mealPlan === "BB" && offer.mealPlanStatus === "confirmed";
+    const rooms = Math.max(1, offer.roomsRequired);
+    let rate: { source: string; room: string | null; guests: number | null; totalMinor: number; breakfast: string; freeCancellation: boolean | null } | null = null;
+    let priceSources: { source: string; totalMinor: number }[] = [];
+
+    if (requiresBreakfast) {
+      if (!this.cfg.direct?.enabled) {
+        return {
+          status: "not_supported",
+          offer,
+          previousTotalMinor: offer.totalAmountMinor,
+          currentTotalMinor: offer.totalAmountMinor,
+          message: "A strict breakfast rate can only be live-checked through the entity verifier. Enable the direct verification pilot and check again.",
+          checkedAt,
+        };
+      }
+      const entity = await fetchGoogleHotelsEntity({
+        token,
+        destination: offer.property.destination,
+        checkIn: offer.stayStart,
+        checkOut: offer.stayEnd,
+        adults: perRoom.adults,
+        childAges: perRoom.childAges ?? [],
+        rooms: 1,
+        currency: offer.currency,
+        fetchImpl: this.fetchImpl,
+        retries: 1,
+        timeoutMs: this.cfg.timeoutMs ?? 15_000,
+        now: this.cfg.now,
+      });
+      const entityRate = chooseGoogleHotelsEntityRate(entity.rates, { requireBreakfast: true, partySize });
+      if (entityRate) {
+        rate = {
+          source: entityRate.source,
+          room: entityRate.room,
+          guests: entityRate.guests,
+          totalMinor: Math.round(entityRate.total * 100) * rooms,
+          breakfast: entityRate.breakfast,
+          freeCancellation: entityRate.cancellation ? /free cancellation/i.test(entityRate.cancellation) : null,
+        };
+      }
+      priceSources = entity.rates.map((r) => ({ source: r.source, totalMinor: Math.round(r.total * 100) * rooms }));
+    } else {
+      const rates = await this.fetchPropertyDetails(offer, input);
+      const liveRate = rates ? chooseGoogleLiveRate(rates, { requireBreakfast: false, partySize }) : null;
+      if (liveRate) {
+        rate = {
+          source: liveRate.source,
+          room: liveRate.room,
+          guests: liveRate.guests,
+          totalMinor: liveRate.totalMinor,
+          breakfast: liveRate.breakfast,
+          freeCancellation: liveRate.freeCancellation,
+        };
+      }
+      priceSources = (rates ?? []).map((r) => ({ source: r.source, totalMinor: r.totalMinor }));
+    }
+
+    if (!rate) {
+      return {
+        status: "unavailable",
+        offer: null,
+        previousTotalMinor: offer.totalAmountMinor,
+        currentTotalMinor: null,
+        message: requiresBreakfast
+          ? "No live breakfast-included rate is available for this property and party. The package cannot be quoted."
+          : "No live rate is available for this property and party. The package cannot be quoted.",
+        checkedAt,
+      };
+    }
+
+    const currentTotalMinor = rate.totalMinor;
+    const changed = currentTotalMinor !== offer.totalAmountMinor;
+    const expiresAt = new Date(Date.parse(checkedAt) + 15 * 60_000).toISOString();
+    const updated: NormalisedOffer = {
+      ...offer,
+      totalAmountMinor: currentTotalMinor,
+      supplierName: rate.source === "Google Hotels" ? "Google Hotels" : `${rate.source} via Google Hotels`,
+      roomType: rate.room ? { ...offer.roomType, name: rate.room } : offer.roomType,
+      cancellation:
+        rate.freeCancellation === null
+          ? offer.cancellation
+          : { ...offer.cancellation, refundable: rate.freeCancellation },
+      retrievedAt: checkedAt,
+      expiresAt,
+      availabilityStatus: "unknown",
+      verificationStatus: "live_checked",
+      providerMetadata: {
+        ...offer.providerMetadata,
+        priceSources,
+        cheapestSource: rate.source,
+        recheck: {
+          checkedAt,
+          source: rate.source,
+          room: rate.room,
+          guests: rate.guests,
+          breakfast: rate.breakfast,
+          freeCancellation: rate.freeCancellation,
+          previousTotalMinor: offer.totalAmountMinor,
+          currentTotalMinor,
+          method: requiresBreakfast ? "entity_rate" : "property_details",
+        },
+      },
+    };
+
     return {
-      status: "not_supported",
-      offer: input.offer,
-      previousTotalMinor: input.offer.totalAmountMinor,
-      currentTotalMinor: input.offer.totalAmountMinor,
-      message: "Aggregated prices change frequently. Run the search again to refresh every source.",
-      checkedAt: this.nowIso(),
+      status: changed ? "price_changed" : "confirmed",
+      offer: updated,
+      previousTotalMinor: offer.totalAmountMinor,
+      currentTotalMinor,
+      checkedAt,
     };
   }
 }

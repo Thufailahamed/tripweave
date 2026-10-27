@@ -12,6 +12,7 @@ import { ApiError, apiGet } from "@/lib/api";
 import { useCan } from "@/lib/session";
 import { formatDate, money } from "@/lib/utils";
 import { ApprovalBanner } from "@/features/quotes/approval-banner";
+import { BookingConfirmationCard } from "@/features/quotes/booking-confirmation";
 import { REVISABLE, statusLabel } from "@/features/quotes/helpers";
 import { LifecycleActions } from "@/features/quotes/lifecycle-actions";
 import { NewVersionButton } from "@/features/quotes/new-version-dialog";
@@ -149,6 +150,8 @@ function QuoteDetail() {
           </CardContent>
         </Card>
       ) : null}
+
+      {isCurrent ? <BookingConfirmationCard quote={quote} confirmation={d.bookingConfirmation} /> : null}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList aria-label="Quotation sections">

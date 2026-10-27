@@ -119,6 +119,12 @@ body {
   letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
 }
+html[data-theme="light"] body {
+  background-image:
+    radial-gradient(1100px 460px at 88% -12%, rgba(238, 108, 14, 0.055), transparent 62%),
+    radial-gradient(860px 460px at 0% 0%, rgba(51, 96, 240, 0.045), transparent 58%);
+  background-attachment: fixed;
+}
 h1, h2, h3 {
   font-family: var(--app-font);
   font-weight: 600;

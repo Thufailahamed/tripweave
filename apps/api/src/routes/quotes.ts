@@ -6,10 +6,11 @@ import { renderProposalPdf } from "@tripweave/proposal-renderer";
 import type { Env, Vars } from "../env";
 import { randomToken, sha256Hex } from "../lib/crypto";
 import { ok, paged, parseBody, parseQuery, requireParam, type AppContext } from "../lib/http";
-import { audit, getTenant, requirePermission, requireTenant } from "../middleware/auth";
+import { audit, can, getTenant, rateLimit, requirePermission, requireTenant } from "../middleware/auth";
 import { sendEmail } from "../services/email";
 import type { StoredPackage } from "../services/pricing";
-import { assertQuotable, assertTransition, buildVersion, clientViewFor, presentVersion } from "../services/quotes";
+import { assertQuotable, assertTransition, buildVersion, clientViewFor, presentVersion, type PackageVerification } from "../services/quotes";
+import { confirmQuoteForBooking } from "../services/booking-confirmation";
 import { loadPricing, requireFx } from "../services/settings";
 
 export const quoteRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -51,7 +52,7 @@ quoteRoutes.post("/quotes", requirePermission("quotes:write"), async (c) => {
   const trip = await trips.getTrip(db, a.organizationId, body.tripRequestId);
   if (!trip) throw new AppError("not_found", "Trip not found");
   const { rec, pkg, itinerary } = await loadPackageForQuote(c, body.packageId, trip.id);
-  assertQuotable(pkg, c.get("deps").now());
+  assertQuotable(pkg, c.get("deps").now(), rec.verification as PackageVerification);
   const currency = trip.budgetCurrency;
   const config = await loadPricing(db, a.organizationId);
   const fx = await requireFx(db, a.organizationId, pkg.selections.map((s) => s.offer.currency).concat(currency));
@@ -71,7 +72,7 @@ quoteRoutes.get("/quotes/:id", requirePermission("quotes:read"), async (c) => {
   const { version: wanted } = parseQuery(c, z.object({ version: z.coerce.number().int().min(1).optional() }));
   const version = await quotes.getVersion(db, q.id, wanted ?? q.currentVersion);
   if (!version) throw new AppError("not_found", "Version not found");
-  const [versions, history, approvals, shares, acceptances] = await Promise.all([quotes.listVersionSummaries(db, q.id), quotes.quoteStatusHistory(db, q.id), quotes.approvalHistory(db, q.id), quotes.listShares(db, q.id), quotes.listAcceptances(db, q.id)]);
+  const [versions, history, approvals, shares, acceptances, bookingConfirmation] = await Promise.all([quotes.listVersionSummaries(db, q.id), quotes.quoteStatusHistory(db, q.id), quotes.approvalHistory(db, q.id), quotes.listShares(db, q.id), quotes.listAcceptances(db, q.id), quotes.latestBookingConfirmation(db, a.organizationId, q.id, q.currentVersion)]);
   const r = rights(c);
   return ok(c, {
     quote: summary(q, r.canSeeMargins),
@@ -79,6 +80,7 @@ quoteRoutes.get("/quotes/:id", requirePermission("quotes:read"), async (c) => {
     versions: versions.map((v) => (r.canSeeMargins ? v : { ...v, totalCostMinor: undefined, grossMarginBp: undefined })),
     history, approvals, shares,
     acceptances: acceptances.map(({ ip_hash: _ipHash, ...rest }) => rest), // never expose the client's hashed IP to staff
+    bookingConfirmation: bookingConfirmation ? (r.canSeeMargins ? bookingConfirmation : { ...bookingConfirmation, totalCostMinor: undefined, checks: bookingConfirmation.checks.map((check) => { const c = check as { previousTotalMinor?: number; currentTotalMinor?: number | null; [key: string]: unknown }; const { previousTotalMinor: _previous, currentTotalMinor: _current, ...rest } = c; return rest; }) }) : null,
     canApprove: a.permissions.has("quotes:approve"),
     // Only the current version can be approved/sent; a rejected approval needs a new version.
     awaitingApproval: version.versionNumber === q.currentVersion && version.approvalRequired && !version.approvedAt && !approvals.some((x) => x.version_number === version.versionNumber && x.decision === "rejected"),
@@ -107,7 +109,7 @@ quoteRoutes.post("/quotes/:id/versions", requirePermission("quotes:write"), asyn
     itineraryStops = loaded.itinerary.stops;
     itineraryTitle = loaded.itinerary.title || trip.title;
     packageId = loaded.rec.id;
-    assertQuotable(pkg, c.get("deps").now());
+    assertQuotable(pkg, c.get("deps").now(), loaded.rec.verification as PackageVerification);
   }
   const baseConfig = { ...(await loadPricing(db, a.organizationId)), ...(body.pricing ?? {}) };
   const config = pricingConfigSchema.parse(baseConfig);
@@ -189,7 +191,7 @@ async function assertIssuable(c: AppContext, q: quotes.QuoteRecord) {
   if (!v) throw new AppError("not_found", "Version not found");
   if (v.approvalRequired && !v.approvedAt) throw new AppError("precondition_failed", "This version needs manager approval (discount or margin threshold) before it can be sent.");
   if (q.validUntil && q.validUntil < c.get("deps").now().toISOString().slice(0, 10)) throw new AppError("precondition_failed", "The validity date has passed; extend it in a new version first.");
-  assertQuotable(v.package as unknown as StoredPackage, c.get("deps").now());
+  assertQuotable(v.package as unknown as StoredPackage, c.get("deps").now(), undefined, { requireLiveExternal: false });
 }
 
 quoteRoutes.post("/quotes/:id/send", requirePermission("quotes:send"), async (c) => {
@@ -216,8 +218,26 @@ quoteRoutes.post("/quotes/:id/send", requirePermission("quotes:send"), async (c)
   return ok(c, { ...share, emailed, status: (await quotes.getQuote(db, a.organizationId, q.id))!.status });
 });
 
-quoteRoutes.post("/quotes/:id/share", requirePermission("quotes:send"), async (c) => {
-  const q = await mustGetQuote(c, requireParam(c, "id"));
+quoteRoutes.post("/quotes/:id/confirm-booking", requirePermission("quotes:write"), rateLimit({ name: "confirm-booking", limit: 60, windowSeconds: 3600, by: "user" }), async (c) => {
+  const a = getTenant(c);
+  const id = requireParam(c, "id");
+  const result = await confirmQuoteForBooking(
+    { env: c.env, db: c.get("db"), deps: c.get("deps") },
+    a.organizationId,
+    a.userId,
+    id,
+    { validityMinutes: Number(c.env.PRICE_VALIDITY_MINUTES ?? 15) },
+  );
+  await audit(c, "quote.booking_confirmation", "quote", id, { status: result.confirmation.status, reference: result.confirmation.reference, allConfirmed: result.allConfirmed, changed: result.changed });
+  const margins = can(c, "margins:view");
+  const checks = margins
+    ? result.checks
+    : result.checks.map(({ previousTotalMinor: _previous, currentTotalMinor: _current, ...check }) => check);
+  const confirmation = margins ? result.confirmation : { ...result.confirmation, totalCostMinor: undefined };
+  return ok(c, { confirmation, checks, allConfirmed: result.allConfirmed, changed: result.changed });
+});
+
+quoteRoutes.post("/quotes/:id/share", requirePermission("quotes:send"), async (c) => {  const q = await mustGetQuote(c, requireParam(c, "id"));
   const body = await parseBody(c, quoteShareSchema);
   if (!["ready_for_review", "sent", "viewed"].includes(q.status)) throw new AppError("invalid_transition", "Share links can be created once a quotation is ready for review or sent.");
   await assertIssuable(c, q);

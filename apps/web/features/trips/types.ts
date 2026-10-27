@@ -161,6 +161,7 @@ export interface PackageSelectionView {
   costMinor: number;
   offer: NormalisedOffer;
   metrics: { unrated?: boolean; centreDistanceKm?: number | null } & Record<string, unknown>;
+  coverImageId?: string | null;
 }
 
 export interface PackageBody {
@@ -197,6 +198,15 @@ export interface PackagePricing {
   approval?: { required: boolean; reasons?: string[] } & Record<string, unknown>;
 }
 
+export interface PackageVerificationView {
+  status?: "verified" | "failed";
+  allVerified?: boolean;
+  checkedAt?: string;
+  validUntil?: string | null;
+  checks?: { stopId: string; offerId: string; propertyName?: string; status: string; message?: string }[];
+  unverified?: string[];
+}
+
 export interface PackageView {
   id: string;
   jobId: string;
@@ -206,6 +216,7 @@ export interface PackageView {
   manuallyModified: boolean;
   feasibility: string;
   createdAt: string;
+  verification?: PackageVerificationView;
   package: PackageBody;
   pricing: PackagePricing | null;
 }

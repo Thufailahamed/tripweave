@@ -32,6 +32,16 @@ export interface PropertySearchResult {
 export type HotelAvailabilityInput = HotelSearchInput & { propertyIds?: string[] };
 export type RoomOffer = NormalisedOffer;
 
+/** Short-lived discovery cache. Quote-grade validation must never use this. */
+export interface HotelSearchCacheEntry {
+  offers: RoomOffer[];
+  cachedAt: string;
+}
+export interface HotelSearchCache {
+  get(key: string): Promise<HotelSearchCacheEntry | null>;
+  set(key: string, value: HotelSearchCacheEntry, ttlSeconds: number): Promise<void>;
+}
+
 export interface PriceCheckInput {
   offer: NormalisedOffer;
   organizationId: string;

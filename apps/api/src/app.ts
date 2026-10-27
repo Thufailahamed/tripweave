@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Deps, Env, Vars } from "./env";
 import { authenticate, enforceEmailVerification } from "./middleware/auth";
 import { csrfGuard, errorHandler, notFoundHandler, requestContext } from "./middleware/core";
+import { enforcePlatformAvailability } from "./middleware/maintenance";
 import { adminRoutes } from "./routes/admin";
 import { authRoutes } from "./routes/auth";
 import { customerRoutes } from "./routes/customers";
@@ -13,8 +14,9 @@ import { quoteRoutes } from "./routes/quotes";
 import { reportRoutes } from "./routes/reports";
 import { tripRoutes } from "./routes/trips";
 import { defaultBuildLlm, defaultBuildProviders } from "./services/providers";
+import { API_VERSION } from "./lib/version";
 
-export const API_VERSION = "0.1.0";
+export { API_VERSION };
 
 export function defaultDeps(schedule: Deps["schedule"]): Deps {
   return {
@@ -50,6 +52,7 @@ export function createApp(overrides: Partial<Deps> = {}) {
   });
 
   v1.use("*", csrfGuard, authenticate, enforceEmailVerification);
+  v1.use("*", enforcePlatformAvailability);
   v1.route("/auth", authRoutes);
   v1.route("/public", publicRoutes);
   v1.route("/admin", adminRoutes);

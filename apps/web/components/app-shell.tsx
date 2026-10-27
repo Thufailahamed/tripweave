@@ -12,6 +12,7 @@ import { useCan, useSession, type SessionData } from "@/lib/session";
 import { cn, relativeTime, titleCase } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/brand";
+import { PlatformBanner } from "@/components/platform-banner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/overlay";
 import { toast } from "sonner";
 import { VerifyEmailBanner } from "@/features/settings/verify-email-banner";
@@ -46,6 +47,7 @@ const CRUMBS: Record<string, string> = {
   dashboard: "Dashboard", trips: "Trip requests", quotes: "Quotations", customers: "Customers", hotels: "Hotel catalogue", rates: "Rates & imports", agreements: "Suppliers & contracts",
   "hotel-workspace": "Hotel portfolio", partners: "Partner sharing", enquiries: "Enquiries", reports: "Reports", settings: "Settings", admin: "Platform admin", new: "New", itinerary: "Itinerary",
   optimise: "Optimisation", packages: "Package comparison", team: "Team", pricing: "Pricing & currency", branding: "Branding", integrations: "Integrations", audit: "Audit log", account: "Account",
+  organizations: "Organisations", users: "Users", jobs: "Optimisation jobs", communications: "Communications", providers: "Providers & usage", support: "Support access",
 };
 
 function Breadcrumbs({ className }: { className?: string }) {
@@ -406,6 +408,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-8 md:px-10 md:py-10">
+          <PlatformBanner />
           <VerifyEmailBanner />
           {/* Keyed by route so each page eases in on navigation. */}
           <div key={pathname} className="tw-page-in">
