@@ -1,0 +1,16 @@
+node_modules
+.next
+.wrangler
+dist
+.dev.vars
+.env
+.env.local
+*.log
+.vinext
+.open-next
+coverage
+
+tsconfig.tsbuildinfo
+.cloudflare
+.vinext
+.wrangler-dev.log

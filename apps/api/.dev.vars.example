@@ -1,0 +1,16 @@
+# Copy to .dev.vars for local development (git-ignored). Placeholders only.
+ENVIRONMENT=development
+# HOTELBEDS_API_KEY=
+# HOTELBEDS_SECRET=
+# AMADEUS_CLIENT_ID=
+# AMADEUS_CLIENT_SECRET=
+# Also set HOTEL_EXTERNAL_PROVIDER=hotelbeds,amadeus (or just amadeus) for local runs.
+# Google Hotels (Booking.com, Expedia, Agoda, Hotels.com) via SerpApi:
+# SERPAPI_API_KEY=
+# Also include google_hotels in HOTEL_EXTERNAL_PROVIDER and enable it in Settings → Integrations.
+# OpenStreetMap discovery is controlled by HOTEL_DISCOVERY=true in wrangler.jsonc.
+# Set OSM_CONTACT_EMAIL to a real contact address in production (used in the User-Agent).
+# GOOGLE_MAPS_API_KEY=
+# EMAIL_PROVIDER_API_KEY=
+# TURNSTILE_SECRET_KEY=
+# MFA_ENCRYPTION_KEY=local-dev-only-change-me-0123456789

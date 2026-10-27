@@ -1,0 +1,6 @@
+The fonts in this directory (Noto Sans, Noto Sans Sinhala, Noto Sans Tamil) are
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts) and are licensed
+under the SIL Open Font License, Version 1.1, available at https://openfontlicense.org
+
+They are embedded (as subsets) into generated quotation PDFs. Regenerate the inlined
+modules in src/fonts with: node scripts/gen-fonts.mjs

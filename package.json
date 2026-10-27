@@ -1,0 +1,21 @@
+{
+  "name": "tripweave",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@12.5.1",
+  "scripts": {
+    "typecheck": "pnpm -r --parallel typecheck",
+    "test": "vitest run",
+    "lint": "pnpm -r --parallel lint",
+    "dev:api": "pnpm --filter @tripweave/api dev",
+    "dev:web": "pnpm --filter @tripweave/web dev",
+    "db:migrate:local": "pnpm --filter @tripweave/api db:migrate:local",
+    "db:seed:local": "pnpm --filter @tripweave/api db:seed:local",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.4",
+    "@types/node": "^24.0.0"
+  }
+}

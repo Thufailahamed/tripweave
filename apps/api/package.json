@@ -1,0 +1,37 @@
+{
+  "name": "@tripweave/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev --port 8787 --persist-to ../../.wrangler/state",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json",
+    "cf-typegen": "wrangler types src/worker-configuration.d.ts",
+    "db:migrate:local": "wrangler d1 migrations apply tripweave --local --persist-to ../../.wrangler/state",
+    "db:migrate:staging": "wrangler d1 migrations apply tripweave-staging --remote --env staging",
+    "db:migrate:production": "wrangler d1 migrations apply tripweave-production --remote --env production",
+    "db:seed:local": "node ../../scripts/seed.mjs",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production"
+  },
+  "dependencies": {
+    "@tripweave/ai": "workspace:*",
+    "@tripweave/database": "workspace:*",
+    "@tripweave/itinerary-engine": "workspace:*",
+    "@tripweave/optimisation-engine": "workspace:*",
+    "@tripweave/pricing-engine": "workspace:*",
+    "@tripweave/proposal-renderer": "workspace:*",
+    "@tripweave/provider-contracts": "workspace:*",
+    "@tripweave/shared": "workspace:*",
+    "fflate": "^0.8.3",
+    "hono": "^4.9.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250920.0",
+    "tsx": "^4.20.0",
+    "wrangler": "^4.40.0"
+  }
+}

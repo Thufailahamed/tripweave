@@ -1,0 +1,128 @@
+{
+  // TripWeave API Worker (Hono). Resource IDs below are placeholders: create the real resources with
+  // `wrangler d1 create`, `wrangler r2 bucket create`, `wrangler queues create`, `wrangler kv namespace create`
+  // and paste the IDs per environment (see docs/deployment.md). Secrets are NEVER stored here: use `wrangler secret put`.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tripweave-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "vars": {
+    "ENVIRONMENT": "development",
+    "APP_BASE_URL": "http://localhost:3000",
+    "SESSION_COOKIE_NAME": "tw_session",
+    "COOKIE_SECURE": "false",
+    "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "ROUTING_PROVIDER": "estimate",
+    "HOTEL_EXTERNAL_PROVIDER": "google_hotels",
+    "HOTEL_DISCOVERY": "true",
+    "OSM_CONTACT_EMAIL": "ops@tripweave.example",
+    "SERPAPI_BASE_URL": "https://serpapi.com/search.json",
+    "HOTELBEDS_BASE_URL": "https://api.test.hotelbeds.com",
+    "AMADEUS_BASE_URL": "https://test.api.amadeus.com",
+    "ENABLE_MOCK_PROVIDER": "true",
+    "EMAIL_PROVIDER": "outbox"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tripweave",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "tripweave-media" }],
+  "kv_namespaces": [{ "binding": "CACHE", "id": "00000000000000000000000000000000" }],
+  // NOTE: the Workers AI binding is only declared for staging/production. Workers AI has no local
+  // emulation (it needs a Cloudflare API token even under `wrangler dev`), so local development uses the
+  // deterministic rule-based parser. Use `wrangler dev --remote` with an API token to test Workers AI.
+
+  "queues": {
+    "producers": [{ "binding": "JOBS", "queue": "tripweave-jobs" }],
+    "consumers": [
+      {
+        "queue": "tripweave-jobs",
+        "max_batch_size": 5,
+        "max_batch_timeout": 2,
+        "max_retries": 3,
+        "dead_letter_queue": "tripweave-jobs-dlq"
+      }
+    ]
+  },
+  "workflows": [
+    { "name": "tripweave-optimisation", "binding": "OPTIMISATION_WORKFLOW", "class_name": "OptimisationWorkflow" }
+  ],
+  "triggers": { "crons": ["15 * * * *", "30 2 * * *"] },
+
+  "env": {
+    "staging": {
+      "name": "tripweave-api-staging",
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "APP_BASE_URL": "https://staging.example.com",
+        "SESSION_COOKIE_NAME": "__Host-tw_session",
+        "COOKIE_SECURE": "true",
+        "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        "ROUTING_PROVIDER": "google",
+        "HOTEL_EXTERNAL_PROVIDER": "hotelbeds,amadeus,google_hotels",
+        "HOTEL_DISCOVERY": "true",
+        "OSM_CONTACT_EMAIL": "ops@tripweave.example",
+        "SERPAPI_BASE_URL": "https://serpapi.com/search.json",
+        "HOTELBEDS_BASE_URL": "https://api.test.hotelbeds.com",
+        "AMADEUS_BASE_URL": "https://test.api.amadeus.com",
+        "ENABLE_MOCK_PROVIDER": "true",
+        "REQUIRE_EMAIL_VERIFICATION": "true",
+        "EMAIL_PROVIDER": "resend"
+      },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "tripweave-staging", "database_id": "REPLACE_WITH_STAGING_D1_ID", "migrations_dir": "../../migrations" }
+      ],
+      "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "tripweave-media-staging" }],
+      "kv_namespaces": [{ "binding": "CACHE", "id": "REPLACE_WITH_STAGING_KV_ID" }],
+      "ai": { "binding": "AI" },
+      "queues": {
+        "producers": [{ "binding": "JOBS", "queue": "tripweave-jobs-staging" }],
+        "consumers": [{ "queue": "tripweave-jobs-staging", "max_batch_size": 5, "max_batch_timeout": 2, "max_retries": 3, "dead_letter_queue": "tripweave-jobs-dlq-staging" }]
+      },
+      "workflows": [{ "name": "tripweave-optimisation-staging", "binding": "OPTIMISATION_WORKFLOW", "class_name": "OptimisationWorkflow" }],
+      "triggers": { "crons": ["15 * * * *", "30 2 * * *"] },
+      "routes": [{ "pattern": "staging.example.com/api/*", "zone_name": "example.com" }]
+    },
+    "production": {
+      "name": "tripweave-api-production",
+      "vars": {
+        "ENVIRONMENT": "production",
+        "APP_BASE_URL": "https://app.example.com",
+        "SESSION_COOKIE_NAME": "__Host-tw_session",
+        "COOKIE_SECURE": "true",
+        "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        "ROUTING_PROVIDER": "google",
+        "HOTEL_EXTERNAL_PROVIDER": "hotelbeds,amadeus,google_hotels",
+        "HOTEL_DISCOVERY": "true",
+        "OSM_CONTACT_EMAIL": "ops@tripweave.example",
+        "SERPAPI_BASE_URL": "https://serpapi.com/search.json",
+        "HOTELBEDS_BASE_URL": "https://api.hotelbeds.com",
+        "AMADEUS_BASE_URL": "https://api.amadeus.com",
+        "ENABLE_MOCK_PROVIDER": "false",
+        "REQUIRE_EMAIL_VERIFICATION": "true",
+        "EMAIL_PROVIDER": "resend"
+      },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "tripweave-production", "database_id": "REPLACE_WITH_PRODUCTION_D1_ID", "migrations_dir": "../../migrations" }
+      ],
+      "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "tripweave-media-production" }],
+      "kv_namespaces": [{ "binding": "CACHE", "id": "REPLACE_WITH_PRODUCTION_KV_ID" }],
+      "ai": { "binding": "AI" },
+      "queues": {
+        "producers": [{ "binding": "JOBS", "queue": "tripweave-jobs-production" }],
+        "consumers": [{ "queue": "tripweave-jobs-production", "max_batch_size": 5, "max_batch_timeout": 2, "max_retries": 3, "dead_letter_queue": "tripweave-jobs-dlq-production" }]
+      },
+      "workflows": [{ "name": "tripweave-optimisation-production", "binding": "OPTIMISATION_WORKFLOW", "class_name": "OptimisationWorkflow" }],
+      "triggers": { "crons": ["15 * * * *", "30 2 * * *"] },
+      "routes": [{ "pattern": "app.example.com/api/*", "zone_name": "example.com" }]
+    }
+  }
+}
