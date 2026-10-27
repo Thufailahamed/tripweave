@@ -214,6 +214,7 @@ export async function stageFetch(ctx: PipelineCtx, jobId: string): Promise<{ off
   const providers = ctx.deps.buildProviders(ctx.env, ctx.db, org, {
     includeExternal: request.constraints.includeExternalProviders && enabledExternalProviders(integrations).length > 0,
     externalProviders: enabledExternalProviders(integrations),
+    googleHotelsDirect: integrations.googleHotelsDirect,
     includeMock: request.constraints.includeMockProvider && integrations.mockProvider,
   });
 

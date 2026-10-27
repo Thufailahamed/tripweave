@@ -265,7 +265,7 @@ optimisationRoutes.post("/hotel-search", requirePermission("hotels:read"), rateL
   if (body.checkOut <= body.checkIn) throw new AppError("validation_failed", "Check-out must be after check-in", { issues: [{ path: "checkOut", message: "Check-out must be after check-in" }] });
   const db = c.get("db");
   const integrations = await loadIntegrations(db, a.organizationId);
-  const providers = c.get("deps").buildProviders(c.env, db, a.organizationId, { includeExternal: body.includeExternal && enabledExternalProviders(integrations).length > 0, externalProviders: enabledExternalProviders(integrations), includeMock: body.includeMock && integrations.mockProvider });
+  const providers = c.get("deps").buildProviders(c.env, db, a.organizationId, { includeExternal: body.includeExternal && enabledExternalProviders(integrations).length > 0, externalProviders: enabledExternalProviders(integrations), googleHotelsDirect: integrations.googleHotelsDirect, includeMock: body.includeMock && integrations.mockProvider });
   const res = await searchAllProviders(providers, { organizationId: a.organizationId, destination: body.destination, latitude: body.latitude, longitude: body.longitude, checkIn: body.checkIn, checkOut: body.checkOut, party: body.party }, {
     timeoutMs: 20_000, concurrency: 3, retry: { retries: 1, baseDelayMs: 300, maxDelayMs: 2_000, sleep: c.get("deps").sleep },
     onCall: (o) => ops.recordProviderCall(db, { organizationId: a.organizationId, providerKey: o.providerKey, operation: "search", status: o.status === "ok" ? "ok" : o.status === "timeout" ? "timeout" : "error", latencyMs: o.latencyMs, errorCode: o.errorCode }),

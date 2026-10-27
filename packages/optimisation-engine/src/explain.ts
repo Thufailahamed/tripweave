@@ -72,8 +72,14 @@ export function buildExplanation(pkg: Omit<CandidatePackage, "explanation" | "as
       unverified.push(`${o.property.name}: availability is ${o.availabilityStatus.replace("_", " ")}, not confirmed.`);
     if (o.verificationStatus !== "live_checked" && o.verificationStatus !== "company_managed")
       unverified.push(`${o.property.name}: price has not been live-checked.`);
-    if (o.mealPlanStatus === "unconfirmed")
-      assumptions.push(`${o.property.name}: the meal plan (${MEAL_PLAN_LABELS[o.mealPlan]}) is not published by the source and must be confirmed before quoting.`);
+    if (o.mealPlanStatus === "unconfirmed") {
+      const basis = o.providerMetadata?.breakfastBasis;
+      assumptions.push(
+        o.providerKey === "google_hotels" && basis === "free"
+          ? `${o.property.name}: Google Hotels lists free breakfast, but the booked rate's board basis must be confirmed before quoting.`
+          : `${o.property.name}: the meal plan (${MEAL_PLAN_LABELS[o.mealPlan]}) is not published by the source and must be confirmed before quoting.`,
+      );
+    }
     if (s.metrics.unrated) assumptions.push(`${o.property.name} has no verified guest rating; quality was scored conservatively.`);
     if (s.metrics.centreDistanceKm === null) assumptions.push(`${o.property.name}: location relative to ${s.destination} is unknown.`);
     if (o.currency !== cur) assumptions.push(`${o.property.name} is priced in ${o.currency} and converted to ${cur} using the job's exchange-rate snapshot.`);

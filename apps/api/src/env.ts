@@ -88,7 +88,7 @@ export interface Deps {
   now: () => Date;
   /** Runs background work (Worker waitUntil in production, awaited collection in tests). */
   schedule: (task: Promise<unknown>) => void;
-  buildProviders: (env: Env, db: Db, organizationId: string, opts: { includeExternal: boolean; includeMock: boolean; /** External supplier keys the organisation enabled; omitted means every configured one. */ externalProviders?: string[] }) => HotelProvider[];
+  buildProviders: (env: Env, db: Db, organizationId: string, opts: { includeExternal: boolean; includeMock: boolean; /** External supplier keys the organisation enabled; omitted means every configured one. */ externalProviders?: string[]; /** Pilot: entity-page verification of the cheapest Google Hotels results. */ googleHotelsDirect?: boolean }) => HotelProvider[];
   buildLlm: (env: Env) => LlmClient | null;
   fetch: typeof fetch;
   sleep: (ms: number) => Promise<void>;

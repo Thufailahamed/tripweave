@@ -15,6 +15,38 @@ export interface Accepted {
 
 const norm = (s: string) => s.toLowerCase().trim();
 
+/**
+ * A Google Hotels offer can carry a rate-level breakfast-included total. When the trip requires
+ * breakfast, use that total and promote the offer to a confirmed BB rate; otherwise keep the
+ * cheaper cross-OTA price and leave the board basis unconfirmed.
+ */
+export function withStrictBreakfastOffer(offer: NormalisedOffer, c: Pick<HardConstraints, "requiredMealPlans">): NormalisedOffer {
+  if (offer.providerKey !== "google_hotels" || !c.requiredMealPlans.includes("BB")) return offer;
+  // Enrichment records rate-level evidence under `directEnrichment`; older flat metadata is still read
+  // so offers stored before the nested shape was introduced keep working.
+  const direct = offer.providerMetadata?.directEnrichment;
+  const nested = direct && typeof direct === "object" && !Array.isArray(direct) ? (direct as Record<string, unknown>) : undefined;
+  const total = offer.providerMetadata?.strictBreakfastTotalMinor ?? nested?.strictBreakfastTotalMinor;
+  if (typeof total !== "number" || !Number.isFinite(total) || total <= 0) return offer;
+  const sourceValue = offer.providerMetadata?.strictBreakfastSource ?? nested?.strictBreakfastSource;
+  const roomValue = offer.providerMetadata?.strictBreakfastRoom ?? nested?.strictBreakfastRoom;
+  const source = typeof sourceValue === "string" ? sourceValue : offer.supplierName;
+  const room = typeof roomValue === "string" ? roomValue : null;
+  return {
+    ...offer,
+    mealPlan: "BB",
+    mealPlanStatus: "confirmed",
+    totalAmountMinor: total,
+    supplierName: `${source} via Google Hotels`,
+    roomType: room ? { ...offer.roomType, name: room } : offer.roomType,
+    providerMetadata: {
+      ...offer.providerMetadata,
+      boardBasisSource: "rate",
+      priceBasis: "strict_breakfast",
+    },
+  };
+}
+
 export function missingAmenities(offer: NormalisedOffer, required: string[]): string[] {
   const have = new Set([...offer.property.amenities].map(norm));
   return required.filter((r) => !have.has(norm(r)));
@@ -46,8 +78,10 @@ export function rejectionReasons(
   add(
     "meal_plan",
     c.requiredMealPlans.length > 0 &&
-      !c.requiredMealPlans.includes(offer.mealPlan) &&
-      !(c.allowUnconfirmedMealPlans && offer.mealPlanStatus === "unconfirmed"),
+      !(
+        (offer.mealPlanStatus !== "unconfirmed" && c.requiredMealPlans.includes(offer.mealPlan)) ||
+        (c.allowUnconfirmedMealPlans && offer.mealPlanStatus === "unconfirmed")
+      ),
   );
   add("amenities", c.requiredAmenities.length > 0 && missingAmenities(offer, c.requiredAmenities).length > 0);
   add(
@@ -83,9 +117,10 @@ export function filterCandidates(
   const rejections: StopFunnel["rejections"] = {};
   const accepted: Accepted[] = [];
   const seen = new Set<string>();
-  for (const offer of offers) {
-    if (seen.has(offer.offerId)) continue;
-    seen.add(offer.offerId);
+  for (const original of offers) {
+    if (seen.has(original.offerId)) continue;
+    seen.add(original.offerId);
+    const offer = withStrictBreakfastOffer(original, input.constraints);
     const reasons = rejectionReasons(offer, stop, input.constraints, input.party, opts.nowIso, input.convert, opts.ignore);
     const cost = input.convert(offer.totalAmountMinor, offer.currency);
     if (

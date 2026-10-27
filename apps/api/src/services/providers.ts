@@ -34,7 +34,7 @@ async function catalogueBenchmark(internal: InternalInventoryProvider, input: Ho
 }
 
 /** Providers are constructed per request; credentials are read only from Worker secrets. */
-export function defaultBuildProviders(env: Env, db: Db, _orgId: string, opts: { includeExternal: boolean; includeMock: boolean; externalProviders?: string[] }): HotelProvider[] {
+export function defaultBuildProviders(env: Env, db: Db, _orgId: string, opts: { includeExternal: boolean; includeMock: boolean; externalProviders?: string[]; /** Pilot: entity-page verification of the cheapest Google Hotels results. */ googleHotelsDirect?: boolean }): HotelProvider[] {
   const internal = new InternalInventoryProvider({ load: (q) => inventory.loadInternalInventory(db, q.organizationId, q) });
   const providers: HotelProvider[] = [internal];
   const platformAllows = new Set((env.HOTEL_EXTERNAL_PROVIDER ?? "none").split(",").map((k) => k.trim().toLowerCase()).filter(Boolean));
@@ -51,6 +51,7 @@ export function defaultBuildProviders(env: Env, db: Db, _orgId: string, opts: { 
         apiKey: env.SERPAPI_API_KEY,
         baseUrl: env.SERPAPI_BASE_URL ?? "https://serpapi.com/search.json",
         now: () => new Date(),
+        direct: { enabled: opts.googleHotelsDirect === true },
       }),
     );
   }

@@ -25,13 +25,15 @@ interface O {
   source?: NormalisedOffer["source"];
   maxOcc?: number;
   verification?: NormalisedOffer["verificationStatus"];
+  strictBreakfast?: number;
+  provider?: string;
 }
 
 function offer(o: O): NormalisedOffer {
   const s = stops[o.stop]!;
   return {
     offerId: o.id,
-    providerKey: "internal",
+    providerKey: o.provider ?? "internal",
     externalOfferReference: o.id,
     source: o.source ?? "internal",
     supplierId: "sup",
@@ -68,6 +70,16 @@ function offer(o: O): NormalisedOffer {
     expiresAt: o.expiresAt ?? null,
     availabilityStatus: o.availability ?? "confirmed",
     verificationStatus: o.verification ?? "company_managed",
+    providerMetadata: o.strictBreakfast
+      ? {
+          directEnrichment: {
+            status: "ok",
+            strictBreakfastTotalMinor: o.strictBreakfast,
+            strictBreakfastSource: "Booking.com",
+            strictBreakfastRoom: "Garden Room",
+          },
+        }
+      : undefined,
     isMock: false,
   };
 }
@@ -182,6 +194,54 @@ describe("runSearch", () => {
     expect(allowed.funnel[2]!.rejections.meal_plan ?? 0).toBe(0);
     expect(allowed.packages.length).toBeGreaterThan(0);
     expect(allowed.packages[0]!.assumptions.join(" ")).toMatch(/must be confirmed/i);
+  });
+
+  it("does not treat a property-amenity breakfast as a confirmed meal plan", () => {
+    const offers = pool.map((o): O => (o.stop === 2 ? { ...o, meal: "BB" as MealPlan, mealUnconfirmed: true } : o));
+    const r = runSearch(input({ constraints: constraints({ requiredMealPlans: ["BB"] }) }, offers));
+    expect(r.funnel[2]!.rejections.meal_plan).toBe(4);
+    expect(r.funnel[2]!.accepted).toBe(0);
+    expect(r.packages).toHaveLength(0);
+
+    const allowed = runSearch(input({ constraints: constraints({ requiredMealPlans: ["BB"], allowUnconfirmedMealPlans: true }) }, offers));
+    expect(allowed.funnel[2]!.rejections.meal_plan ?? 0).toBe(0);
+    expect(allowed.packages.length).toBeGreaterThan(0);
+    expect(allowed.packages[0]!.assumptions.join(" ")).toMatch(/must be confirmed/i);
+  });
+
+  it("uses a rate-level breakfast-included total when breakfast is required", () => {
+    const offers: O[] = [
+      { id: "k", stop: 0, price: 4_000 },
+      { id: "n", stop: 1, price: 5_000 },
+      { id: "e", stop: 2, price: 5_000, meal: "BB", mealUnconfirmed: true, strictBreakfast: 7_500, maxOcc: 3, provider: "google_hotels" },
+    ];
+
+    const strict = runSearch(input({ constraints: constraints({ requiredMealPlans: ["BB"] }) }, offers));
+    expect(strict.packages.length).toBeGreaterThan(0);
+    const strictSelection = strict.packages[0]!.selections.find((s) => s.stopId === "s3")!;
+    expect(strictSelection.offer.totalAmountMinor).toBe(7_500);
+    expect(strictSelection.costMinor).toBe(7_500);
+    expect(strictSelection.offer.mealPlan).toBe("BB");
+    expect(strictSelection.offer.mealPlanStatus).toBe("confirmed");
+    expect(strictSelection.offer.roomType.name).toBe("Garden Room");
+    expect(strictSelection.offer.providerMetadata?.boardBasisSource).toBe("rate");
+    expect(strictSelection.offer.supplierName).toBe("Booking.com via Google Hotels");
+
+    const loose = runSearch(input({}, offers));
+    const looseSelection = loose.packages[0]!.selections.find((s) => s.stopId === "s3")!;
+    expect(looseSelection.offer.totalAmountMinor).toBe(5_000);
+    expect(looseSelection.offer.mealPlanStatus).toBe("unconfirmed");
+  });
+
+  it("does not use a breakfast-only rate to satisfy a half-board requirement", () => {
+    const offers: O[] = [
+      { id: "k", stop: 0, price: 4_000 },
+      { id: "n", stop: 1, price: 5_000 },
+      { id: "e", stop: 2, price: 5_000, meal: "BB", mealUnconfirmed: true, strictBreakfast: 7_500, provider: "google_hotels" },
+    ];
+    const hb = runSearch(input({ constraints: constraints({ requiredMealPlans: ["HB"] }) }, offers));
+    expect(hb.funnel[2]!.rejections.meal_plan).toBe(1);
+    expect(hb.packages).toHaveLength(0);
   });
 
   it("accepts an unpublished meal plan when no meal plan is required, and flags it", () => {

@@ -14,6 +14,7 @@ import { ProviderHealthTable, type ProviderHealth } from "@/features/settings/pr
 
 interface IntegrationSettings {
   externalProviders: { hotelbeds: boolean; amadeus?: boolean; google_hotels?: boolean; openstreetmap?: boolean };
+  googleHotelsDirect?: boolean;
   mockProvider: boolean;
   aiEngine: "auto" | "rules";
 }
@@ -91,6 +92,14 @@ function Settings({ data }: { data: IntegrationsResponse }) {
             {p.googleHotelsConfigured
               ? "Live cross-OTA prices from Booking.com, Expedia, Agoda, Hotels.com and others via Google Hotels. Each package records which site the price came from."
               : "Not available: the platform operator has not configured the Google Hotels (SerpApi) key."}
+          </p>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Switch id="int-google-hotels-direct" checked={draft.googleHotelsDirect ?? false} disabled={!p.googleHotelsConfigured && !draft.googleHotelsDirect} onCheckedChange={(v) => setDraft((d) => ({ ...d, googleHotelsDirect: v }))} label="Verify room and breakfast details on hotel pages (pilot)" />
+          <p className="ml-11 text-xs text-muted-foreground">
+            {draft.externalProviders.google_hotels
+              ? "Checks the cheapest cross-OTA results against each hotel's Google Hotels page to confirm room type, occupancy, cancellation and whether breakfast is included in the rate. Prices still come from the main Google Hotels search. Slower, and some hotels publish no room detail, so unconfirmed offers stay flagged."
+              : "Only takes effect while cross-OTA search is switched on. Prices still come from the main Google Hotels search; this adds rate-level room and breakfast evidence."}
           </p>
         </div>
         <div className="flex flex-col gap-1">

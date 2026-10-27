@@ -1,9 +1,39 @@
 import { nightsBetween, type HotelCategory, type NormalisedOffer } from "@tripweave/shared";
-import { fetchJson, type FetchLike } from "./resilience";
+import { fetchJson, mapWithConcurrency, type FetchLike } from "./resilience";
+import {
+  chooseGoogleHotelsEntityRate,
+  fetchGoogleHotelsEntity,
+  GoogleHotelsDirectError,
+  type GoogleHotelsEntity,
+} from "./google-hotels-direct";
 import { ProviderError, type HotelAvailabilityInput, type HotelProvider, type HotelSearchInput, type PriceCheckInput, type PriceCheckResult, type PropertySearchResult, type RoomOffer } from "./types";
 import { normalizeHotelName } from "./discovery";
 
 export const GOOGLE_HOTELS_PROVIDER_KEY = "google_hotels";
+
+export interface GoogleHotelsEntityCacheEntry {
+  entity: GoogleHotelsEntity;
+  cachedAt: number;
+}
+
+/**
+ * Disabled-by-default entity enrichment. SerpApi remains the price-discovery source; entity pages
+ * only add rate-level room, occupancy, cancellation and board-basis evidence for the cheapest
+ * properties in each search. A failed entity fetch never removes a SerpApi offer.
+ */
+export interface GoogleHotelsDirectConfig {
+  enabled: boolean;
+  /** Cheapest distinct properties to verify per search. Clamped to 1..10; defaults to 5. */
+  maxProperties?: number;
+  concurrency?: number;
+  timeoutMs?: number;
+  retries?: number;
+  /** Short-lived cache; 0 disables it. Defaults to 15 minutes. */
+  cacheTtlMs?: number;
+  cache?: Map<string, GoogleHotelsEntityCacheEntry>;
+  failureThreshold?: number;
+  sleep?: (ms: number) => Promise<void>;
+}
 
 export interface GoogleHotelsConfig {
   apiKey: string;
@@ -15,6 +45,7 @@ export interface GoogleHotelsConfig {
   /** Two-letter Google country for pricing; defaults to the destination's market. */
   gl?: string;
   hl?: string;
+  direct?: GoogleHotelsDirectConfig;
 }
 
 interface GoogleMoney {
@@ -76,6 +107,23 @@ export function amenitiesFromGoogle(list: string[] | undefined): string[] {
   return [...out];
 }
 
+/**
+ * Google lists "Free breakfast" for properties where breakfast is included and "Breakfast ($)"
+ * where it is chargeable. These are property-level amenities, not rate-level proof: the exact
+ * board basis still has to be confirmed on the booked rate. Rate-level entity checks can later
+ * upgrade an offer with `strictBreakfastTotalMinor`; the app treats that as confirmed.
+ */
+export function mealPlanFromGoogle(amenities: string[] | undefined): {
+  mealPlan: "BB" | "RO";
+  basis: "free" | "paid" | "unknown";
+  boardBasisSource: "property_amenity" | "unknown";
+} {
+  const list = amenities ?? [];
+  if (list.some((a) => /free breakfast|breakfast included/i.test(a))) return { mealPlan: "BB", basis: "free", boardBasisSource: "property_amenity" };
+  if (list.some((a) => /breakfast/i.test(a))) return { mealPlan: "RO", basis: "paid", boardBasisSource: "property_amenity" };
+  return { mealPlan: "RO", basis: "unknown", boardBasisSource: "unknown" };
+}
+
 export function categoryFromStars(stars: number | undefined): HotelCategory {
   if (!stars || stars < 1) return "standard";
   return STAR_CATEGORY[Math.min(5, Math.round(stars))] ?? "standard";
@@ -93,6 +141,39 @@ export interface GooglePriceChoice {
   nightlyMinor: number | null;
   freeCancellation: boolean | null;
   allSources: { source: string; totalMinor: number }[];
+}
+
+/** Google Hotels has no room-count parameter: query the largest room and scale by room count. */
+function perRoomOccupancy(input: HotelSearchInput) {
+  const roomCount = Math.max(1, input.party.rooms.length);
+  return input.party.rooms.reduce(
+    (best, r) => (r.adults + r.children > best.adults + best.children ? r : best),
+    input.party.rooms[0] ?? { adults: Math.max(1, Math.ceil(input.party.adults / roomCount)), children: 0, childAges: [] as number[] },
+  );
+}
+
+const DEFAULT_ENTITY_CACHE = new Map<string, GoogleHotelsEntityCacheEntry>();
+const DEFAULT_ENTITY_CACHE_TTL_MS = 15 * 60_000;
+const ENTITY_CACHE_LIMIT = 200;
+
+function entityCacheKey(token: string, input: HotelAvailabilityInput, perRoom: { adults: number; children: number; childAges?: number[] }): string {
+  return [token, input.checkIn, input.checkOut, perRoom.adults, perRoom.children, (perRoom.childAges ?? []).join(","), 1, input.currency ?? "USD"].join("|");
+}
+
+function emptyEnrichment(over: Record<string, unknown>): Record<string, unknown> {
+  return {
+    status: "skipped",
+    cached: false,
+    latencyMs: null,
+    rateCount: null,
+    entityTotalMinor: null,
+    strictBreakfastTotalMinor: null,
+    strictBreakfastSource: null,
+    strictBreakfastRoom: null,
+    strictBreakfastGuests: null,
+    strictBreakfastCancellation: null,
+    ...over,
+  };
 }
 
 /** Picks the cheapest priced source for one property and reports every source it saw. */
@@ -145,21 +226,24 @@ export class GoogleHotelsProvider implements HotelProvider {
   }
 
   private async fetchProperties(input: HotelSearchInput): Promise<GoogleProperty[]> {
+    // Google Hotels has no room-count parameter: it prices one room for the guests it is given.
+    // Query the largest room and scale by the number of rooms the party needs.
+    const perRoom = perRoomOccupancy(input);
     const q = new URLSearchParams({
       engine: "google_hotels",
       q: `Hotels in ${input.destination}`,
       check_in_date: input.checkIn,
       check_out_date: input.checkOut,
-      adults: String(input.party.adults),
-      children: String(input.party.children),
+      adults: String(perRoom.adults),
+      children: String(perRoom.children),
       currency: input.currency ?? "USD",
       hl: this.cfg.hl ?? "en",
       gl: this.cfg.gl ?? "us",
       api_key: this.cfg.apiKey,
     });
-    if (input.party.children > 0) {
-      const ages = input.party.childAges ?? [];
-      const filled = Array.from({ length: input.party.children }, (_, i) => ages[i] ?? 8);
+    if (perRoom.children > 0) {
+      const ages = perRoom.childAges ?? [];
+      const filled = Array.from({ length: perRoom.children }, (_, i) => ages[i] ?? 8);
       q.set("children_ages", filled.join(","));
     }
     const res = await fetchJson<GoogleHotelsResponse>(this.key, this.fetchImpl, `${this.cfg.baseUrl ?? "https://serpapi.com/search.json"}?${q.toString()}`, { headers: { Accept: "application/json" } }, this.cfg.timeoutMs ?? 15_000);
@@ -201,6 +285,7 @@ export class GoogleHotelsProvider implements HotelProvider {
       const choice = chooseGooglePrice(p, nights, rooms);
       if (!choice) continue;
       const stars = p.extracted_hotel_class ?? null;
+      const meal = mealPlanFromGoogle(p.amenities);
       const id = `gh:${p.property_token ?? normalizeHotelName(p.name)}:${input.checkIn}:${input.checkOut}:${rooms}:${choice.source.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
       offers.push({
         offerId: id,
@@ -208,7 +293,7 @@ export class GoogleHotelsProvider implements HotelProvider {
         externalOfferReference: id,
         source: "external",
         supplierId: null,
-        supplierName: `${choice.source} via Google Hotels`,
+        supplierName: choice.source === "Google Hotels" ? "Google Hotels" : `${choice.source} via Google Hotels`,
         property: {
           id: `g:${p.property_token ?? normalizeHotelName(p.name)}`,
           name: p.name,
@@ -225,7 +310,7 @@ export class GoogleHotelsProvider implements HotelProvider {
         stayStart: input.checkIn,
         stayEnd: input.checkOut,
         nights,
-        mealPlan: "RO",
+        mealPlan: meal.mealPlan,
         mealPlanStatus: "unconfirmed",
         roomsRequired: rooms,
         occupancy: input.party,
@@ -244,6 +329,8 @@ export class GoogleHotelsProvider implements HotelProvider {
           listingSource: "google_hotels",
           priceSources: choice.allSources,
           cheapestSource: choice.source,
+          breakfastBasis: meal.basis,
+          boardBasisSource: meal.boardBasisSource,
           googleRating: p.overall_rating ?? null,
           reviews: p.reviews ?? null,
           propertyToken: p.property_token ?? null,
@@ -252,7 +339,125 @@ export class GoogleHotelsProvider implements HotelProvider {
         isMock: false,
       });
     }
-    return offers;
+    return this.cfg.direct?.enabled ? this.enrichOffers(offers, input) : offers;
+  }
+
+  /**
+   * Verifies the cheapest properties against their Google Hotels entity page. Entity pages are
+   * slower and less complete than SerpApi, so this is bounded, cached and failure-isolated: a
+   * failed or missing entity page leaves the SerpApi offer untouched.
+   */
+  private async enrichOffers(offers: NormalisedOffer[], input: HotelAvailabilityInput): Promise<NormalisedOffer[]> {
+    const direct = this.cfg.direct;
+    if (!direct?.enabled || offers.length === 0) return offers;
+    const rooms = Math.max(1, input.party.rooms.length);
+    const perRoom = perRoomOccupancy(input);
+    const partySize = Math.max(1, perRoom.adults + perRoom.children);
+    const maxProperties = Math.min(10, Math.max(1, direct.maxProperties ?? 5));
+    const concurrency = Math.min(5, Math.max(1, direct.concurrency ?? 2));
+    const cacheTtlMs = Math.max(0, direct.cacheTtlMs ?? DEFAULT_ENTITY_CACHE_TTL_MS);
+    const cache = direct.cache ?? DEFAULT_ENTITY_CACHE;
+    const threshold = Math.max(1, direct.failureThreshold ?? 3);
+    const clock = this.cfg.now ?? (() => new Date());
+
+    const byToken = new Map<string, NormalisedOffer[]>();
+    for (const offer of offers) {
+      const token = typeof offer.providerMetadata?.propertyToken === "string" ? offer.providerMetadata.propertyToken : null;
+      if (!token) continue;
+      const list = byToken.get(token) ?? [];
+      list.push(offer);
+      byToken.set(token, list);
+    }
+    const ranked = [...byToken.entries()]
+      .sort((a, b) => Math.min(...a[1].map((o) => o.totalAmountMinor)) - Math.min(...b[1].map((o) => o.totalAmountMinor)))
+      .map(([token]) => token)
+      .slice(0, maxProperties);
+    const selected = new Set(ranked);
+
+    const results = new Map<string, { entity?: GoogleHotelsEntity; cached: boolean; latencyMs: number; errorCode?: string }>();
+    let failures = 0;
+    let circuitOpen = false;
+
+    await mapWithConcurrency(ranked, concurrency, async (token) => {
+      if (circuitOpen) {
+        results.set(token, { cached: false, latencyMs: 0, errorCode: "circuit_open" });
+        return;
+      }
+      const key = entityCacheKey(token, input, perRoom);
+      const cached = cache.get(key);
+      const now = clock().getTime();
+      if (cached && cacheTtlMs > 0 && now - cached.cachedAt < cacheTtlMs) {
+        results.set(token, { entity: cached.entity, cached: true, latencyMs: 0 });
+        return;
+      }
+      try {
+        const fetched = await fetchGoogleHotelsEntity({
+          token,
+          destination: input.destination,
+          checkIn: input.checkIn,
+          checkOut: input.checkOut,
+          adults: perRoom.adults,
+          childAges: perRoom.childAges ?? [],
+          rooms: 1,
+          currency: input.currency ?? "USD",
+          fetchImpl: this.fetchImpl,
+          retries: direct.retries ?? 2,
+          timeoutMs: direct.timeoutMs ?? 15_000,
+          sleep: direct.sleep,
+          now: clock,
+        });
+        if (cacheTtlMs > 0) {
+          cache.set(key, { entity: fetched, cachedAt: now });
+          if (cache.size > ENTITY_CACHE_LIMIT) {
+            const oldest = cache.keys().next().value;
+            if (oldest !== undefined) cache.delete(oldest);
+          }
+        }
+        failures = 0;
+        results.set(token, { entity: fetched, cached: false, latencyMs: fetched.latencyMs });
+      } catch (err) {
+        failures++;
+        if (failures >= threshold) circuitOpen = true;
+        const errorCode = err instanceof GoogleHotelsDirectError ? err.code : "unknown";
+        results.set(token, { cached: false, latencyMs: 0, errorCode });
+      }
+    });
+
+    return offers.map((offer) => {
+      const token = typeof offer.providerMetadata?.propertyToken === "string" ? offer.providerMetadata.propertyToken : null;
+      if (!token) {
+        return { ...offer, providerMetadata: { ...offer.providerMetadata, directEnrichment: emptyEnrichment({ reason: "missing_token" }) } };
+      }
+      if (!selected.has(token)) {
+        return { ...offer, providerMetadata: { ...offer.providerMetadata, directEnrichment: emptyEnrichment({ reason: "outside_top_n" }) } };
+      }
+      const result = results.get(token);
+      if (!result?.entity) {
+        return { ...offer, providerMetadata: { ...offer.providerMetadata, directEnrichment: emptyEnrichment({ status: "error", errorCode: result?.errorCode ?? "unknown" }) } };
+      }
+      const entity = result.entity;
+      const cheapest = chooseGoogleHotelsEntityRate(entity.rates, { requireBreakfast: false, partySize });
+      const strict = chooseGoogleHotelsEntityRate(entity.rates, { requireBreakfast: true, partySize });
+      return {
+        ...offer,
+        providerMetadata: {
+          ...offer.providerMetadata,
+          directEnrichment: {
+            status: "ok",
+            boardBasisSource: "rate",
+            cached: result.cached,
+            latencyMs: result.latencyMs,
+            rateCount: entity.rates.length,
+            entityTotalMinor: cheapest ? Math.round(cheapest.total * 100) * rooms : null,
+            strictBreakfastTotalMinor: strict ? Math.round(strict.total * 100) * rooms : null,
+            strictBreakfastSource: strict?.source ?? null,
+            strictBreakfastRoom: strict?.room ?? null,
+            strictBreakfastGuests: strict?.guests ?? null,
+            strictBreakfastCancellation: strict?.cancellation ?? null,
+          },
+        },
+      };
+    });
   }
 
   async recheckPrice(input: PriceCheckInput): Promise<PriceCheckResult> {

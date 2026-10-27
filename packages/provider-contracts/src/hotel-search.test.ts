@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NormalisedOffer } from "@tripweave/shared";
-import { GoogleHotelsProvider, chooseGooglePrice } from "./google-hotels";
+import { GoogleHotelsProvider, chooseGooglePrice, mealPlanFromGoogle } from "./google-hotels";
 import { OsmDiscoveryProvider, normalizeHotelName, parseOverpassElements } from "./discovery";
 import { mergeDiscoveredOffers } from "./merge";
 import type { FetchLike } from "./resilience";
@@ -111,13 +111,23 @@ describe("Google Hotels aggregation", () => {
     expect(o.supplierName).toBe("Booking.com via Google Hotels");
     expect(o.totalAmountMinor).toBe(100 * 100 * 2 * 2);
     expect(o.property.reviewScore).toBe(9.2);
+    expect(o.mealPlan).toBe("RO");
     expect(o.mealPlanStatus).toBe("unconfirmed");
+    expect(o.providerMetadata?.breakfastBasis).toBe("paid");
+    expect(o.providerMetadata?.boardBasisSource).toBe("property_amenity");
     expect(o.providerMetadata?.priceSources).toEqual([
       { source: "Booking.com", totalMinor: 40_000 },
       { source: "Expedia.com", totalMinor: 48_000 },
     ]);
-    expect(seenUrl).toContain("children_ages=8%2C11");
+    expect(seenUrl).toContain("adults=1");
+    expect(seenUrl).toContain("children_ages=8");
     expect(seenUrl).toContain("engine=google_hotels");
+  });
+
+  it("distinguishes Google's free-breakfast amenity from a chargeable breakfast without treating either as rate-level proof", () => {
+    expect(mealPlanFromGoogle(["Free breakfast", "Free Wi-Fi"])).toEqual({ mealPlan: "BB", basis: "free", boardBasisSource: "property_amenity" });
+    expect(mealPlanFromGoogle(["Breakfast ($)", "Free Wi-Fi"])).toEqual({ mealPlan: "RO", basis: "paid", boardBasisSource: "property_amenity" });
+    expect(mealPlanFromGoogle([])).toEqual({ mealPlan: "RO", basis: "unknown", boardBasisSource: "unknown" });
   });
 
   it("picks the cheapest total, not the cheapest nightly, across sources", () => {

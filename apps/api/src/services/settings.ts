@@ -13,12 +13,15 @@ export const integrationSchema = z.object({
       openstreetmap: z.boolean().default(true),
     })
     .default({ hotelbeds: false, amadeus: false, google_hotels: false, openstreetmap: true }),
+  /** Disabled-by-default pilot: verify the cheapest Google Hotels results against entity pages. */
+  googleHotelsDirect: z.boolean().default(false),
   mockProvider: z.boolean().default(false),
   aiEngine: z.enum(["auto", "rules"]).default("auto"),
 });
 export type IntegrationSettings = z.infer<typeof integrationSchema>;
 export const DEFAULT_INTEGRATIONS: IntegrationSettings = {
   externalProviders: { hotelbeds: false, amadeus: false, google_hotels: false, openstreetmap: true },
+  googleHotelsDirect: false,
   mockProvider: false,
   aiEngine: "auto",
 };
