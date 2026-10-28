@@ -10,6 +10,8 @@ export interface LlmTextArgs {
   user: string;
   signal: AbortSignal;
   maxTokens?: number;
+  /** Sampling temperature for free-form text; structured extraction always uses 0. */
+  temperature?: number;
 }
 
 export const DEFAULT_WORKERS_AI_MODEL = "@cf/google/gemma-4-26b-a4b-it";
@@ -60,7 +62,7 @@ export class WorkersAiClient implements LlmClient {
           { role: "user", content: args.user },
         ],
         max_tokens: args.maxTokens ?? 2_000,
-        temperature: 0,
+        temperature: args.temperature ?? 0,
         ...this.thinkingOptions(),
       },
       this.gatewayOptions(),
@@ -84,7 +86,7 @@ export class WorkersAiClient implements LlmClient {
           ],
           stream: true,
           max_tokens: args.maxTokens ?? 2_000,
-          temperature: 0,
+          temperature: args.temperature ?? 0,
           ...this.thinkingOptions(),
         },
         this.gatewayOptions(),
@@ -158,7 +160,7 @@ export class ExternalLlmClient implements LlmClient {
       headers: this.headers(),
       body: JSON.stringify({
         model: this.cfg.model,
-        temperature: 0,
+        temperature: args.temperature ?? 0,
         max_tokens: args.maxTokens ?? 2_000,
         messages: [
           { role: "system", content: args.system },
@@ -181,7 +183,7 @@ export class ExternalLlmClient implements LlmClient {
       headers: this.headers(),
       body: JSON.stringify({
         model: this.cfg.model,
-        temperature: 0,
+        temperature: args.temperature ?? 0,
         max_tokens: args.maxTokens ?? 2_000,
         stream: true,
         messages: [

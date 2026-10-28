@@ -11,9 +11,9 @@ export interface LlmClient {
   /** Returns the raw model output (object or JSON string) for the structured-extraction prompt. */
   extract(args: { system: string; user: string; schema: object; signal: AbortSignal }): Promise<unknown>;
   /** Plain-text completion, used by the planning interface when streaming is unavailable. */
-  generate?(args: { system: string; user: string; signal: AbortSignal; maxTokens?: number }): Promise<string>;
+  generate?(args: { system: string; user: string; signal: AbortSignal; maxTokens?: number; temperature?: number }): Promise<string>;
   /** Plain-text token/chunk stream for progressive Generative UI rendering. */
-  stream?(args: { system: string; user: string; signal: AbortSignal; maxTokens?: number }): AsyncIterable<string>;
+  stream?(args: { system: string; user: string; signal: AbortSignal; maxTokens?: number; temperature?: number }): AsyncIterable<string>;
 }
 
 export interface ParseOptions {

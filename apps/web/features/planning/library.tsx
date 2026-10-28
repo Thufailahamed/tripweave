@@ -13,6 +13,9 @@ import { TripRequirementSummary } from "./components/requirements";
 import { RouteSummary } from "./components/routes";
 import { TripMap } from "./components/map";
 import { DestinationTimeline } from "./components/timeline";
+import { PlaceMap } from "./components/place-map";
+import { RouteStop, RouteStops } from "./components/route-stops";
+import { Callout, ComparisonTable, DayPlan, FollowUps, KeyFacts, Lead, PlaceCard, PlaceGallery, TipList } from "./components/travel";
 
 type PlanningLibrary = ReturnType<typeof createLibrary>;
 let cached: PlanningLibrary | null = null;
@@ -42,6 +45,18 @@ export function getPlanningLibrary(): PlanningLibrary {
       RouteSummary,
       RecommendationExplanation,
       QuickActions,
+      Lead,
+      PlaceCard,
+      PlaceGallery,
+      PlaceMap,
+      RouteStop,
+      RouteStops,
+      DayPlan,
+      TipList,
+      KeyFacts,
+      Callout,
+      ComparisonTable,
+      FollowUps,
     ],
     componentGroups: planningComponentGroups,
   });

@@ -27,6 +27,18 @@ describe("planning contract", () => {
       "RouteSummary",
       "RecommendationExplanation",
       "QuickActions",
+      "Lead",
+      "PlaceMap",
+      "PlaceCard",
+      "PlaceGallery",
+      "RouteStop",
+      "RouteStops",
+      "DayPlan",
+      "TipList",
+      "KeyFacts",
+      "Callout",
+      "ComparisonTable",
+      "FollowUps",
     ]);
     expect(Object.keys(getPlanningJSONSchema().properties ?? {}).sort()).toEqual([...PLANNING_COMPONENT_NAMES].sort());
   });

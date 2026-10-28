@@ -185,6 +185,69 @@ describe("planning validation", () => {
     expect(validatePlanningProgram(`root = PlanningCanvas("Trip", [summary], "See https://evil.example")\nsummary = TripRequirementSummary("trip_1")`, baseSnapshot)).toMatchObject({ ok: false });
   });
 
+  it("accepts general travel guides that do not depend on the saved trip", () => {
+    const program = `root = PlanningCanvas("Three days in the hill country", [intro, places, day, tips, facts, note, table, next], "Ideas to adapt, not bookings.")
+intro = Lead("Ella suits slow mornings and short walks.")
+places = PlaceGallery("Where to go", ["Ella, Sri Lanka", "Nuwara Eliya, Sri Lanka"])
+day = DayPlan("Day 1", "Ridge walk", ["Early walk", "Afternoon at a tea estate"])
+tips = TipList("Pack", ["Light layers"])
+facts = KeyFacts("Quick facts", ["Best season: December to March"])
+note = Callout("caution", "Check entry rules", "Confirm with the official travel advice.")
+table = ComparisonTable("Regions", ["Hill country", "Coast"], [["Weather", "Cooler", "Warm"]])
+next = FollowUps("Keep going", ["Where should I stay in Ella?"])`;
+    expect(validatePlanningProgram(program, baseSnapshot)).toEqual({ ok: true });
+  });
+
+  it("rejects travel-guide blocks with links, prices, unknown tones, bounds breaches or misaligned table rows", () => {
+    const wrap = (block: string) => `root = PlanningCanvas("Guide", [block])\nblock = ${block}`;
+    expect(validatePlanningProgram(wrap(`PlaceCard("https://evil.example/photo.jpg")`), baseSnapshot)).toMatchObject({ ok: false });
+    expect(validatePlanningProgram(wrap(`DayPlan("Day 1", "Walk", ["Taxi costs 40 USD"])`), baseSnapshot)).toMatchObject({ ok: false });
+    expect(validatePlanningProgram(wrap(`Callout("alarm", "Warning", "Text")`), baseSnapshot)).toMatchObject({ ok: false });
+    expect(validatePlanningProgram(wrap(`ComparisonTable("Regions", ["A", "B"], [["Weather", "Only one"]])`), baseSnapshot)).toMatchObject({ ok: false });
+    expect(validatePlanningProgram(wrap(`TipList("Pack", [])`), baseSnapshot)).toMatchObject({ ok: false });
+    expect(validatePlanningProgram(wrap(`Lead("${"x".repeat(601)}")`), baseSnapshot)).toMatchObject({ ok: false });
+  });
+
+  it("checks that TripHero and TripMap only reference the snapshot's trip and itinerary", () => {
+    expect(validatePlanningProgram(`root = PlanningCanvas("Trip", [hero])\nhero = TripHero("trip_other")`, baseSnapshot)).toMatchObject({ ok: false });
+    expect(validatePlanningProgram(`root = PlanningCanvas("Trip", [map])\nmap = TripMap("itinerary_1")`, baseSnapshot)).toMatchObject({ ok: false });
+    expect(validatePlanningProgram(`root = PlanningCanvas("Trip", [hero])\nhero = TripHero("trip_1")`, baseSnapshot)).toEqual({ ok: true });
+  });
+
+  it("accepts PlaceMap with two to twelve places and enforces a map when the question requires one", () => {
+    const map = `root = PlanningCanvas("Route", [map])\nmap = PlaceMap("Area", ["Ella, Sri Lanka", "Kandy, Sri Lanka"])`;
+    expect(validatePlanningProgram(map, baseSnapshot)).toEqual({ ok: true });
+    expect(validatePlanningProgram(`root = PlanningCanvas("Route", [map])\nmap = PlaceMap("Area", ["Ella, Sri Lanka"])`, baseSnapshot)).toMatchObject({ ok: false });
+    expect(validatePlanningProgram(`root = PlanningCanvas("Route", [map])\nmap = PlaceMap("Area", ["Ella, https://evil.example", "Kandy"])`, baseSnapshot)).toMatchObject({ ok: false });
+    const lead = `root = PlanningCanvas("Route", [lead])\nlead = Lead("Ella is a hill town.")`;
+    expect(validatePlanningProgram(lead, baseSnapshot)).toEqual({ ok: true });
+    expect(validatePlanningProgram(lead, baseSnapshot, { requireMap: true })).toMatchObject({ ok: false, errors: [expect.stringMatching(/PlaceMap/)] });
+    expect(validatePlanningProgram(map, baseSnapshot, { requireMap: true })).toEqual({ ok: true });
+  });
+
+  it("accepts route stops made of RouteStop blocks and header chips as the fourth argument", () => {
+    const route = `root = PlanningCanvas("Route", [stops], "Estimates.", ["Walking", "Hill country"])
+kandy = RouteStop("Kandy, Sri Lanka", "9:00 AM", "60 min", "Start at the lake.")
+ella = RouteStop("Ella, Sri Lanka")
+stops = RouteStops("Your route", [kandy, ella])`;
+    expect(validatePlanningProgram(route, baseSnapshot)).toEqual({ ok: true });
+  });
+
+  it("rejects route stops that hold other blocks, URL-bearing stops and more than five chips", () => {
+    const withLead = `root = PlanningCanvas("Route", [stops])\nkandy = RouteStop("Kandy, Sri Lanka")\nlead = Lead("Hello.")\nstops = RouteStops("Your route", [kandy, lead])`;
+    expect(validatePlanningProgram(withLead, baseSnapshot)).toMatchObject({ ok: false });
+    const withUrl = `root = PlanningCanvas("Route", [stops])\nkandy = RouteStop("https://evil.example/kandy")\nella = RouteStop("Ella, Sri Lanka")\nstops = RouteStops("Your route", [kandy, ella])`;
+    expect(validatePlanningProgram(withUrl, baseSnapshot)).toMatchObject({ ok: false });
+    const manyChips = `root = PlanningCanvas("Route", [lead], "Estimates.", ["a", "b", "c", "d", "e", "f"])\nlead = Lead("Hello.")`;
+    expect(validatePlanningProgram(manyChips, baseSnapshot)).toMatchObject({ ok: false });
+  });
+
+  it("includes the saved itinerary on the map in the fallback when an itinerary exists", () => {
+    const fallback = buildFallbackProgram(packageSnapshot);
+    expect(fallback).toContain("TripMap(");
+    expect(validatePlanningProgram(fallback, packageSnapshot)).toEqual({ ok: true });
+  });
+
   it("accepts short generation refs that differ from database IDs", () => {
     const refSnapshot: PlanningSnapshot = {
       ...packageSnapshot,

@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { ArrowUpRight, Compass, Layers, Lightbulb, ListChecks, Sparkles } from "lucide-react";
+import { ArrowUpRight, Camera, CalendarDays, Compass, Layers, Lightbulb, ListChecks, Luggage, Sparkles } from "lucide-react";
 import type { PlanningSnapshot, PlanningStarter } from "@tripweave/planning-contract";
 import { nightsLabel } from "@/lib/utils";
 import { DestinationPhoto } from "./components/destination-photo";
@@ -9,6 +9,9 @@ function starterIcon(label: string) {
   if (/missing|ask/i.test(label)) return ListChecks;
   if (/package|compare|value/i.test(label)) return Layers;
   if (/why|explain|recommend/i.test(label)) return Lightbulb;
+  if (/best time|season|when/i.test(label)) return CalendarDays;
+  if (/pack/i.test(label)) return Luggage;
+  if (/see|do|day|relaxed|visit/i.test(label)) return Camera;
   if (/next|itinerary|summar|glance/i.test(label)) return Compass;
   return Sparkles;
 }
@@ -55,7 +58,7 @@ export function PlannerWelcome({
 
       <div className="flex flex-col gap-5 bg-[var(--pl-surface)] p-5 sm:p-7">
         <p className="max-w-xl text-[13px] leading-relaxed text-[var(--pl-muted)]">
-          I can compose a summary, compare packages, explain a recommendation or gather the missing details. Every layout is built for this request; every number comes from your saved trip.
+          Ask about this trip or about travel in general. I can compose a route, compare packages, explain a recommendation, suggest places and day plans, or gather missing details. Every layout is built for your question; every trip number comes from the saved trip.
         </p>
 
         {stops.length > 0 ? (
@@ -81,7 +84,7 @@ export function PlannerWelcome({
           </div>
         ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {starters.map((starter, index) => {
             const Icon = starterIcon(starter.label);
             return (

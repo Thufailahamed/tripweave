@@ -2,6 +2,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { destinationImage, hotelImageUrl } from "../imagery";
+import { usePlaceImage } from "../place-image";
 
 function hash(value: string): number {
   let h = 2166136261;
@@ -73,13 +74,16 @@ export function DestinationPhoto({
 }) {
   const [failed, setFailed] = React.useState(false);
   const source = destinationImage(destination);
-  const src = hotelImageUrl(imageId) ?? source?.src ?? null;
-  const label = alt ?? source?.alt ?? destination;
+  const remote = usePlaceImage(!imageId && !source ? destination : null);
+  const src = hotelImageUrl(imageId) ?? source?.src ?? remote?.imageUrl ?? null;
+  const label = alt ?? source?.alt ?? remote?.articleTitle ?? destination;
 
   React.useEffect(() => {
     setFailed(false);
   }, [src]);
 
+  const loading = !src && !failed && !imageId && !source && remote === undefined && destination.trim().length > 0;
+  if (loading) return <div aria-hidden className={cn("pl-sheen size-full", className)} />;
   if (!src || failed) return <PostcardArt destination={destination} className={className} />;
 
   return (
@@ -99,9 +103,20 @@ export function DestinationPhoto({
 }
 
 export function PhotoCreditLine({ destination, imageId }: { destination: string; imageId?: string | null }) {
-  if (imageId) return null;
   const source = destinationImage(destination);
-  if (!source) return null;
+  const remote = usePlaceImage(!imageId && !source ? destination : null);
+  if (imageId) return null;
+  if (!source) {
+    if (!remote?.imageUrl) return null;
+    return (
+      <span className="text-[10px] text-[var(--pl-muted)]">
+        Photo:{" "}
+        <a href={remote.articleUrl} target="_blank" rel="noreferrer noopener" className="underline decoration-[var(--pl-line)] underline-offset-2 hover:text-[var(--pl-ink)]">
+          {remote.articleTitle} on Wikipedia
+        </a>
+      </span>
+    );
+  }
   return (
     <span className="text-[10px] text-[var(--pl-muted)]">
       Photo:{" "}

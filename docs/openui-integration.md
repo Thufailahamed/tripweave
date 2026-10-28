@@ -16,7 +16,7 @@ No OpenUI-hosted inference service is required. OpenUI Gateway and Autofix are *
 | Path | Responsibility |
 |---|---|
 | `packages/planning-contract` | The allowlist: component names, Zod prop schemas, descriptions, question/answer schemas and the snapshot TypeScript contract. Shared by API and web. |
-| `packages/ai/src/planning.ts` | Provider-independent planning prompt, context projection, streaming wrapper and optional text generation. |
+| `packages/ai/src/planning.ts` | Provider-independent planning prompt, repair input, context projection, starters and streaming wrapper. |
 | `apps/api/src/services/planning.ts` | Builds the permission-filtered snapshot, validates final programs, builds the deterministic fallback and applies clarification answers. |
 | `apps/api/src/routes/planning.ts` | `GET /trips/:id/planning`, streaming `POST /trips/:id/planning` and `POST /trips/:id/planning/clarifications`. |
 | `apps/web/features/planning` | React component library, renderer panel, SSE client, standard fallback view and tests. |
@@ -45,6 +45,28 @@ Generated replies read like a composed travel journal rather than a dashboard:
 - **Progressive composition.** Blocks stream through the OpenUI renderer, so the interface builds up as the model writes. The server still validates the complete program before treating it as final, and the standard view remains the fallback.
 - **The whole trip dossier.** The trip detail page scopes the same warm palette (`--background`, `--card`, ink primary and terracotta accent) through `.tw-trip`, so the photographic cover, underline tabs, requirement cards, quote cards and planner read as one document. The cover reuses the destination image map and shows the photo credit; the status editor moved from the image into a compact footer control. The plan composer is only sticky once a conversation exists, so it never covers the opening state.
 
+## General travel answers
+
+Replies are no longer limited to the saved trip. The model classifies each request:
+
+- **The saved trip** (requirements, itinerary, packages, hotels, quotes) is grounded in the server snapshot, as before.
+- **General travel advice** (destinations, seasons, things to see, day ideas, packing, etiquette) uses the travel-guide blocks and needs no trip data.
+- **Anything else** gets a short PlanningCanvas saying the assistant helps with travel, with follow-up questions.
+
+General guidance is qualitative. The validator rejects prices, currency amounts and URLs in every string the model writes. General cost, visa, health or safety questions are answered with a caution `Callout` that names the official source.
+
+Place photographs, short descriptions and coordinates come from Wikipedia's search API, resolved by the API (`apps/api/src/services/places.ts`) through `POST /planning/places`. The browser batches place names into one request, so it never calls Wikipedia directly. The model supplies a place name only. Results are cached for all organisations in the `place_media` table (30 days for articles, one day for misses). Only Wikimedia-hosted HTTPS images are returned, every photo credits its article, a place with no free image shows generated postcard artwork, and rate-limited lookups are retried rather than cached.
+
+## Maps
+
+Location questions always get a map. `requestNeedsMap` detects questions about where places are, routes and distances. For those, the server requires a `PlaceMap` (general places, plotted from their public coordinates in the order given) or a `TripMap` (the saved itinerary). A reply without one is repaired once, like any other validation failure. Places without coordinates are listed rather than guessed.
+
+## Generation, repair and variety
+
+- Planning replies are sampled at `PLANNING_TEMPERATURE` (0.6). Structured extraction stays at 0, so the same question no longer returns an identical program.
+- A reply that fails validation gets one repair attempt. The server sends `reset`, which clears the draft, then streams again with the validation problems in a `repairNote`. A second failure falls back to the standard view and says so.
+- The turn timeout is 60 seconds across both attempts. The rate limit is 60 turns per user per hour.
+
 ## Component allowlist
 
 The finite library is defined in `packages/planning-contract/src/library.ts`:
@@ -63,6 +85,7 @@ The finite library is defined in `packages/planning-contract/src/library.ts`:
 - `RouteSummary`
 - `RecommendationExplanation`
 - `QuickActions`
+- `Lead`, `PlaceCard`, `PlaceGallery`, `PlaceMap`, `DayPlan`, `TipList`, `KeyFacts`, `Callout`, `ComparisonTable`, `FollowUps` (travel guide: text and place names only; `PlaceMap` takes two to twelve names)
 
 `BudgetMeter` normalises the optimiser's 0..1 sub-scores before rendering, and `TripHero` accepts the optional itinerary ref so the model can compose a photographic cover without inventing image URLs.
 
@@ -195,3 +218,12 @@ Compatibility notes:
 Do not add a generic `Text`, `HTML`, `Button`, `Image`, `Link`, `Query`, `Mutation` or arbitrary action component. Text belongs in `PlanningCanvas.title/subtitle`; navigation is a fixed host action; images come from an existing hotel offer's internal image id.
 
 Do not add an `actions:` array to either `createLibrary` call. The host-handled actions are deliberately not part of the model-facing library: the OpenUI renderer intercepts defined custom actions, while our components emit fixed raw action events to the host switch. The action names and payload schemas live in `packages/planning-contract/src/actions.ts` and are covered by the contract test.
+
+## Verification
+
+- `pnpm test` covers the validator (every block's schema and reference rules), the repair and map-requirement flow over HTTP, the place cache (shared across organisations, miss caching, rate-limit handling, image host and coordinate checks), and each travel component's interactions.
+- An end-to-end run uses the real API over HTTP with an in-memory database, a scripted model and Wikipedia fixtures that point at real Commons photographs:
+  1. `pnpm --filter @tripweave/api exec tsx test/e2e/serve.ts` (API on port 8787)
+  2. `API_BASE_URL=http://localhost:8787 pnpm --filter @tripweave/web dev` (web on port 3000)
+  3. `node scripts/planner-e2e.mjs <screenshot-dir>` drives Chromium through the trip page and checks every block, the photographs, the map markers and tiles, each interaction, the repair and fallback paths, the off-topic reply, dark mode and a 390px layout.
+- The scripted model proves the rendering and the protocol. It does not prove that Workers AI writes good programs; that still needs a check against the live model on staging.
