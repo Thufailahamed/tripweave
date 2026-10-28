@@ -42,7 +42,7 @@ export default function AdminProvidersPage() {
         <Stat icon={Mail} iconTone={d.email.failed > 0 ? "danger" : "success"} label="Email outbox" value={d.email.pending} hint={`${d.email.failed} failed · ${d.email.sent} delivered`} tone={d.email.failed > 0 ? "warning" : "default"} />
       </div>
 
-      <div className="mb-8 grid gap-6 lg:grid-cols-2">
+      <div className="mb-8 grid gap-6 min-[1680px]:grid-cols-2">
         <div>
           <h2 className="mb-3 font-display text-lg font-semibold">Provider health, 24 hours</h2>
           <ProviderHealthTable rows={d.health24} caption="Provider health, last 24 hours" />

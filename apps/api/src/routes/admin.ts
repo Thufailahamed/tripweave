@@ -122,7 +122,7 @@ adminRoutes.get("/overview", async (c) => {
   if (settings.maintenanceMode) alerts.push({ tone: "warning", title: "Maintenance mode is on", body: "All tenant and public API endpoints are blocked for everyone except platform staff.", href: "/admin/settings" });
   if (!settings.signupsEnabled) alerts.push({ tone: "info", title: "Registrations are closed", body: "New organisations cannot register until you re-enable sign-ups.", href: "/admin/settings" });
   if (email.failed > 0) alerts.push({ tone: "danger", title: `${email.failed} email${email.failed === 1 ? "" : "s"} failed`, body: "Review the outbox and resend after fixing the delivery configuration.", href: "/admin/communications" });
-  if (attentionTotal > 0) alerts.push({ tone: "warning", title: `${attentionTotal} optimisation job${attentionTotal === 1 ? "" : "s"} need attention`, body: "Failed or infeasible jobs from the last seven days.", href: "/admin/jobs?status=failed" });
+  if (attentionTotal > 0) alerts.push({ tone: "warning", title: `${attentionTotal} optimisation job${attentionTotal === 1 ? " needs" : "s need"} attention`, body: "Failed or infeasible jobs from the last seven days.", href: "/admin/jobs?status=failed" });
   for (const p of health) if (p.calls > 0 && p.errors / p.calls >= 0.3) alerts.push({ tone: "warning", title: `${p.providerKey} is unhealthy`, body: `${p.errors} of ${p.calls} calls failed in the last seven days.`, href: "/admin/providers" });
 
   return ok(c, {

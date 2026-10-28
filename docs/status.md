@@ -22,11 +22,14 @@ Covers roadmap phases 1–7 of the master prompt. "Verified" means executed in t
 
 **Phase 9 – Individual traveller product.** Personal workspaces (`organizations.account_kind = 'individual'`, restricted `staff` membership), traveller registration/session routing, a warm editorial shell, public landing at `/travel`, trip wizard with AI extraction + deterministic route suggestion, editable itinerary with map, OpenUI planner in traveller mode with apply-day actions, stay optimisation with budget handoff, budget tracker, deterministic activity-aware packing, private notes, profile/password, expiring read-only share links, printable public trip page, Wikipedia discovery and archive. New tables: `trip_budget_items`, `trip_packing_items`, `trip_notes`, `trip_shares`. `docs/traveler.md` documents the surface and its limits.
 
+**Phase 10 – Premium operator workspace.** Promoted the trip dossier's warm editorial language to the signed-in operator app: paper canvas, ink and terracotta tokens, Instrument Serif display type, warm cards/tables/inputs, matching sidebar/topbar and a warm dark theme. The theme is scoped to `html[data-theme]`, so marketing, auth, public client pages and the traveller app keep their own visual systems. Pipeline chart colours, map tone, dense provider-health tables and hotel read-only states were adjusted to match.
+
 ## Verification performed
 | Check | Result |
 |---|---|
 | `pnpm test` — 49 files, 448 tests (pricing, itinerary, optimiser, providers incl. Amadeus, AI, OpenUI planning, renderer incl. Unicode PDF, D1 repositories, API e2e, security, MFA/email verification, XLSX import, platform admin, traveller APIs/packing/public sharing, apply-day flow, hotel catalogue cards) on real migrations over SQLite | pass |
 | Hotel catalogue browser pass at 1800/1360/1024/768/390 px, light and dark themes: grid/table, filters, active-filter chips, empty state, pagination, sorting, mobile filter disclosure, no overflow or console errors | pass |
+| Premium operator theme browser pass at 1600/1440/390 px, light and dark: dashboard, trips, trip dossier, itinerary, optimisation, packages, quotes, customers, hotels, rates, agreements, reports, settings, admin and detail views; no overflow or console errors | pass |
 | Migration 0006 applied with `wrangler d1 migrations apply --local` (real D1 runtime); `wrangler deploy --dry-run` bundles the Worker (4.7 MB, 1.6 MB gzip, within the 3 MB free-plan limit); `next build` passes | pass |
 | Sample Sinhala/Tamil/Cyrillic/Greek quotation PDF rendered with pdf.js and inspected by eye | pass (see below) |
 | `pnpm typecheck` (strict TS, all packages + API + web) | pass |

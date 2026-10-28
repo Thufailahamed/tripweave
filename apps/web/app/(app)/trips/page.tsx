@@ -181,7 +181,7 @@ function TripsInner() {
         </span>
       </div>
 
-      <form role="search" aria-label="Filter trips" className="tw-surface mb-4 grid gap-3 rounded-2xl border border-border p-4 shadow-[0_14px_40px_-30px_rgba(20,26,45,0.3)] sm:grid-cols-2 lg:grid-cols-5" onSubmit={(e) => e.preventDefault()}>
+      <form role="search" aria-label="Filter trips" className="tw-surface mb-4 grid gap-3 rounded-2xl border border-border p-4 shadow-[0_14px_40px_-30px_rgba(40,32,20,0.3)] sm:grid-cols-2 lg:grid-cols-5" onSubmit={(e) => e.preventDefault()}>
         <Field label="Search" htmlFor="trip-q" className="lg:col-span-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />

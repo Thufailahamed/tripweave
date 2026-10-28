@@ -49,7 +49,7 @@ export function TripFacts({ trip, detail, loading }: { trip: UpcomingTrip; detai
   return (
     <>
       <FactCard icon={Moon} tone="info" label="Travel dates" href={href} i={0}>
-        <p className="text-[32px] font-semibold leading-none tracking-[-0.06em]">{nights > 0 ? nightsLabel(nights) : "—"}</p>
+        <p className="font-display text-[32px] leading-none">{nights > 0 ? nightsLabel(nights) : "—"}</p>
         <p className="tw-num mt-auto flex items-center gap-2 pt-4 text-xs text-foreground/75">
           {formatDate(t.arrivalDate)}
           <ArrowLeftRight className="size-3 text-accent" aria-hidden />
@@ -58,7 +58,7 @@ export function TripFacts({ trip, detail, loading }: { trip: UpcomingTrip; detai
       </FactCard>
       <FactCard icon={Users} tone="accent" label="Travellers" href={href} i={1}>
         <p className="flex items-baseline gap-1.5">
-          <span className="text-[32px] font-semibold leading-none tracking-[-0.06em]">{t.party.adults}</span>
+          <span className="font-display text-[32px] leading-none">{t.party.adults}</span>
           <span className="text-sm text-muted-foreground">/ adult{t.party.adults === 1 ? "" : "s"}</span>
           {t.party.children ? <span className="text-sm text-muted-foreground">· {t.party.children} child{t.party.children === 1 ? "" : "ren"}</span> : null}
         </p>
@@ -76,7 +76,7 @@ export function TripFacts({ trip, detail, loading }: { trip: UpcomingTrip; detai
         </div>
       </FactCard>
       <FactCard icon={Wallet} tone="success" label="Budget" href={href} i={2}>
-        <p className="tw-num text-[32px] font-semibold leading-none tracking-[-0.06em]">{t.budgetAmountMinor === null ? "—" : money(t.budgetAmountMinor, t.budgetCurrency)}</p>
+        <p className="tw-num font-display text-[32px] leading-none">{t.budgetAmountMinor === null ? "—" : money(t.budgetAmountMinor, t.budgetCurrency)}</p>
         <p className="mt-auto flex items-center gap-2 pt-4 text-xs text-foreground/75">
           <Coins className="size-3 text-accent" aria-hidden />
           {t.budgetAmountMinor === null ? "No budget set" : (BUDGET_SCOPE_LABELS[t.budgetScope] ?? titleCase(t.budgetScope))}
@@ -195,10 +195,10 @@ export function ArrivalsTable({ trips, selected, onSelect }: { trips: UpcomingTr
 
 /* ---------- quotation pipeline bubbles ---------- */
 const PIPELINE: { key: string; label: string; statuses: string[]; color: string; ink: string }[] = [
-  { key: "progress", label: "In progress", statuses: ["draft", "preparing", "ready_for_review"], color: "#5b7cfa", ink: "#ffffff" },
-  { key: "sent", label: "With client", statuses: ["sent", "viewed"], color: "#fb9a2c", ink: "#ffffff" },
-  { key: "won", label: "Won", statuses: ["accepted"], color: "#22b67a", ink: "#ffffff" },
-  { key: "lost", label: "Closed", statuses: ["rejected", "expired", "cancelled"], color: "#f26b5e", ink: "#ffffff" },
+  { key: "progress", label: "In progress", statuses: ["draft", "preparing", "ready_for_review"], color: "#4f6f6b", ink: "#ffffff" },
+  { key: "sent", label: "With client", statuses: ["sent", "viewed"], color: "#a94a30", ink: "#ffffff" },
+  { key: "won", label: "Won", statuses: ["accepted"], color: "#526b43", ink: "#ffffff" },
+  { key: "lost", label: "Closed", statuses: ["rejected", "expired", "cancelled"], color: "#6c6259", ink: "#ffffff" },
 ];
 /** Bubble centres (percent of the stage), assigned largest-first. */
 const SLOTS = [

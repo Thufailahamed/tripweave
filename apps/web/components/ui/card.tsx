@@ -15,7 +15,7 @@ export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDiv
   return <div className={cn("flex flex-col gap-1 border-b border-border px-6 py-5", className)} {...props} />;
 }
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn("font-display text-[15px] font-semibold tracking-[-0.03em]", className)} {...props} />;
+  return <h3 className={cn("font-display text-[17px] font-semibold leading-snug tracking-[-0.03em]", className)} {...props} />;
 }
 export function CardDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
   return <p className={cn("text-sm text-muted-foreground", className)} {...props} />;
@@ -229,7 +229,7 @@ export function PageHeader({ title, description, actions, eyebrow, icon, image }
 
   if (image) {
     return (
-      <div className="group tw-surface relative isolate mb-8 flex min-h-[200px] flex-wrap items-end justify-between gap-x-6 gap-y-5 overflow-hidden rounded-[24px] border border-border p-6 shadow-[0_18px_50px_-30px_rgba(20,26,45,0.35)] md:p-9">
+      <div className="group tw-surface relative isolate mb-8 flex min-h-[200px] flex-wrap items-end justify-between gap-x-6 gap-y-5 overflow-hidden rounded-[24px] border border-border p-6 shadow-[0_18px_50px_-30px_rgba(40,32,20,0.35)] md:p-9">
         <div aria-hidden className="absolute inset-0 -z-20 overflow-hidden">
           <Photo image={image} decorative priority sizes="(min-width: 1400px) 1400px, 100vw" className="size-full object-cover object-[center_55%] opacity-80 transition-transform duration-[1800ms] ease-out group-hover:scale-[1.04]" />
         </div>

@@ -94,7 +94,7 @@ export function AmenityChips({ amenities, max = 4 }: { amenities: string[]; max?
 
 export function HotelCard({ hotel }: { hotel: Property }) {
   return (
-    <Card className="group relative flex h-full w-full flex-col overflow-hidden transition-[border-color,translate,box-shadow] duration-300 focus-within:outline-2 focus-within:outline-ring hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_22px_44px_-28px_rgba(20,26,45,0.35)]">
+    <Card className="group relative flex h-full w-full flex-col overflow-hidden transition-[border-color,translate,box-shadow] duration-300 focus-within:outline-2 focus-within:outline-ring hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_22px_44px_-28px_rgba(40,32,20,0.35)]">
       <div className="relative shrink-0 overflow-hidden">
         <CoverImage
           imageId={hotel.coverImageId}

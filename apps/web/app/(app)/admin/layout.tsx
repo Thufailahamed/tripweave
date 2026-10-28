@@ -49,7 +49,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         ) : null}
       </div>
       <div className="no-print sticky top-16 z-10 -mx-4 mb-8 border-y border-border bg-background/85 px-4 py-2 backdrop-blur-xl md:-mx-10 md:px-10">
-        <nav aria-label="Platform administration" className="flex gap-1 overflow-x-auto">
+        <nav aria-label="Platform administration" className="flex gap-1 overflow-x-auto xl:flex-wrap xl:overflow-visible">
           {SECTIONS.map((s) => {
             const active = "exact" in s && s.exact ? pathname === s.href : pathname === s.href || pathname.startsWith(`${s.href}/`);
             return (

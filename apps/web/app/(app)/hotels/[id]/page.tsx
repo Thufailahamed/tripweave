@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Hotel, Lock } from "lucide-react";
-import { Alert, ErrorState, LoadingBlock, PageHeader, StatusBadge } from "@/components/ui/card";
+import { ErrorState, LoadingBlock, PageHeader, StatusBadge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/overlay";
 import { ApiError, apiGet } from "@/lib/api";
@@ -74,8 +74,6 @@ function HotelDetailView() {
           </Button>
         }
       />
-      {!canEdit ? <Alert tone="info" className="mb-4">You can view this property but not change it. It is {property.access === "provider" ? "a provider listing" : "owned by another organisation"}.</Alert> : null}
-
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList aria-label="Hotel sections">
           <TabsTrigger value="overview">Overview</TabsTrigger>

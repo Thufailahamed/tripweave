@@ -211,7 +211,7 @@ export const PackageCard = defineComponent({
         aria-labelledby={headingId}
         data-package-ref={pkg.ref}
         className={cn(
-          "group/pkg relative flex h-full min-w-0 flex-col overflow-hidden rounded-[22px] border bg-card shadow-[0_1px_2px_rgba(20,26,45,0.05),0_24px_50px_-30px_rgba(20,26,45,0.35)] transition-[border-color,box-shadow,translate] duration-500 hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(20,26,45,0.06),0_32px_64px_-30px_rgba(20,26,45,0.45)]",
+          "group/pkg relative flex h-full min-w-0 flex-col overflow-hidden rounded-[22px] border bg-card shadow-[0_1px_2px_rgba(40,32,20,0.05),0_24px_50px_-30px_rgba(40,32,20,0.35)] transition-[border-color,box-shadow,translate] duration-500 hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(40,32,20,0.06),0_32px_64px_-30px_rgba(40,32,20,0.45)]",
           lead ? "border-accent/60 ring-1 ring-accent/35" : "border-border/80",
           anyMock && "border-destructive/50",
         )}

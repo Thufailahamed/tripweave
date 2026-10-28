@@ -20,13 +20,13 @@ export function MonthlyChart({ data }: { data: MonthlyDatum[] }) {
       <div role="img" aria-label={`Quotations created and accepted per month. ${summary}`} className="h-64">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-            <CartesianGrid vertical={false} stroke="rgba(128,140,160,0.22)" />
-            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#8a93a6" }} />
-            <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#8a93a6" }} />
-            <Tooltip cursor={{ fill: "rgba(128,140,160,0.12)" }} contentStyle={{ borderRadius: 10, background: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)", fontSize: 12 }} />
-            <Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="created" name="Created" fill="#5b7cfa" radius={[2, 2, 0, 0]} isAnimationActive={false} />
-            <Bar dataKey="accepted" name="Accepted" fill="#fb9a2c" radius={[2, 2, 0, 0]} isAnimationActive={false} />
+            <CartesianGrid vertical={false} stroke="color-mix(in oklab, var(--border) 78%, transparent)" />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
+            <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
+            <Tooltip cursor={{ fill: "color-mix(in oklab, var(--accent) 6%, transparent)" }} contentStyle={{ borderRadius: 10, background: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)", fontSize: 12 }} />
+            <Legend iconType="square" wrapperStyle={{ fontSize: 12, color: "var(--foreground)" }} />
+            <Bar dataKey="created" name="Created" fill="#5f7d7a" radius={[2, 2, 0, 0]} isAnimationActive={false} />
+            <Bar dataKey="accepted" name="Accepted" fill="#c25736" radius={[2, 2, 0, 0]} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </div>

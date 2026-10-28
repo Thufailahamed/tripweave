@@ -48,10 +48,10 @@ export default function ItineraryMap({ stops, compact, className }: { stops: Map
     if (located.length === 0) return;
     const pts: L.LatLngTuple[] = located.map((s) => [s.latitude, s.longitude]);
     for (const s of located) {
-      const icon = L.divIcon({ className: "", html: `<div style="width:26px;height:26px;border-radius:9999px;background:#fb9a2c;color:#ffffff;font:600 12px system-ui;display:flex;align-items:center;justify-content:center;border:2px solid #ffffff;box-shadow:0 1px 4px rgba(0,0,0,.4)">${s.n}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] });
+      const icon = L.divIcon({ className: "", html: `<div style="width:26px;height:26px;border-radius:9999px;background:#c25736;color:#ffffff;font:600 12px system-ui;display:flex;align-items:center;justify-content:center;border:2px solid #ffffff;box-shadow:0 1px 4px rgba(0,0,0,.4)">${s.n}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] });
       L.marker([s.latitude, s.longitude], { icon, title: `${s.n}. ${s.destination}`, keyboard: true, alt: `Stop ${s.n}: ${s.destination}` }).bindPopup(`${s.n}. ${s.destination.replace(/[<>&]/g, "")}`).addTo(layer);
     }
-    if (pts.length > 1) L.polyline(pts, { color: "#fb9a2c", weight: 3, opacity: 0.7, dashArray: "6 6" }).addTo(layer);
+    if (pts.length > 1) L.polyline(pts, { color: "#c25736", weight: 3, opacity: 0.7, dashArray: "6 6" }).addTo(layer);
     if (pts.length === 1) map.setView(pts[0]!, 9);
     else map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] });
     // eslint-disable-next-line react-hooks/exhaustive-deps

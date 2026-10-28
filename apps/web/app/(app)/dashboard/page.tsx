@@ -252,7 +252,7 @@ export default function DashboardPage() {
                       <li key={j.id} className="border-t border-border first:border-t-0">
                         <Link href={`/trips/${j.tripRequestId}`} className="flex items-center justify-between gap-2 px-6 py-3 transition-colors hover:bg-primary-soft/40">
                           <span className="min-w-0">
-                            <span className="block truncate text-sm">{j.errorSummary ?? "No details were recorded for this job."}</span>
+                            <span className="block line-clamp-2 text-sm leading-snug">{j.errorSummary ?? "No details were recorded for this job."}</span>
                             <span className="block text-xs text-muted-foreground">{relativeTime(j.createdAt)}</span>
                           </span>
                           <StatusBadge status={j.status} />

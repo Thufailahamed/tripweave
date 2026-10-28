@@ -1,0 +1,131 @@
+/*
+ * Premium editorial theme for the signed-in operator app.
+ *
+ * The trip dossier already used this palette locally (`.tw-trip`). These overrides promote it to the
+ * whole workspace: warm paper, ink typography, terracotta accent and serif display type. Marketing,
+ * auth, public client pages and the traveller app do not set `data-theme`, so they keep their own
+ * surfaces and this file has no effect on them.
+ */
+
+html[data-theme="light"] {
+  --background: #f1ebdf;
+  --foreground: #1c1a15;
+  --card: #fffdf8;
+  --card-foreground: #1c1a15;
+  --muted: #ece4d5;
+  --muted-foreground: #6f695c;
+  --border: #e2d8c8;
+  --input: #d7cdbb;
+  --ring: #c25736;
+  --primary: #1c1a15;
+  --primary-foreground: #fbf7ee;
+  --primary-soft: #ece4d5;
+  --accent: #c25736;
+  --accent-foreground: #fff8f2;
+  --accent-soft: #f7e3d7;
+  --sidebar: #fbf7ef;
+  --sidebar-foreground: #1c1a15;
+  --destructive: #b3402f;
+  --destructive-soft: #fbe6e1;
+  --success: #4f7a54;
+  --success-soft: #e7efe3;
+  --warning: #a2793d;
+  --warning-soft: #f6ecd9;
+  --info: #596e58;
+  --info-soft: #e9eee3;
+  --shadow-card: 0 1px 2px rgba(40, 32, 20, 0.04), 0 18px 40px -30px rgba(40, 32, 20, 0.28);
+}
+
+html[data-theme="dark"] {
+  --background: #101714;
+  --foreground: #f5efe3;
+  --card: #18231e;
+  --card-foreground: #f5efe3;
+  --muted: #213029;
+  --muted-foreground: #a79f91;
+  --border: #2b3832;
+  --input: #3a4741;
+  --ring: #e8835f;
+  --primary: #f5efe3;
+  --primary-foreground: #101714;
+  --primary-soft: #213029;
+  --accent: #e8835f;
+  --accent-foreground: #1c110c;
+  --accent-soft: #35241d;
+  --sidebar: #0b1210;
+  --sidebar-foreground: #f5efe3;
+  --destructive: #e8835f;
+  --destructive-soft: #3a241f;
+  --success: #9db18b;
+  --success-soft: #22302a;
+  --warning: #d3a96b;
+  --warning-soft: #33281a;
+  --info: #9db8a8;
+  --info-soft: #1c2c27;
+  --shadow-card: none;
+}
+
+html[data-theme="light"] body {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(1100px 500px at 91% -10%, color-mix(in oklab, var(--accent) 6%, transparent), transparent 62%),
+    radial-gradient(900px 480px at -8% 0%, color-mix(in oklab, var(--success) 5%, transparent), transparent 60%);
+  background-attachment: fixed;
+}
+
+html[data-theme="dark"] body {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(1100px 500px at 91% -10%, color-mix(in oklab, var(--accent) 7%, transparent), transparent 62%),
+    radial-gradient(900px 480px at -8% 0%, color-mix(in oklab, var(--info) 6%, transparent), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* The reference page pairs a warm sans body with an Instrument Serif display voice. */
+html[data-theme] h1,
+html[data-theme] h2,
+html[data-theme] h3,
+html[data-theme] .font-display {
+  font-family: var(--font-instrument), Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.028em;
+}
+
+/* A small terracotta tick replaces the cool grey marker beside page eyebrows. */
+/* The planner has its own serif display class; keep its small utility headings sans. */
+html[data-theme] .tw-planner h2:not(.pl-display),
+html[data-theme] .tw-planner h3:not(.pl-display) {
+  font-family: var(--app-font);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+html[data-theme] .tw-eyebrow::before {
+  border-color: color-mix(in oklab, var(--accent) 52%, transparent);
+  background: color-mix(in oklab, var(--accent) 16%, transparent);
+}
+
+/* Warm shadows on the two places that still carried the old blue-grey shadow. */
+html[data-theme="light"] .tw-lift:hover {
+  box-shadow: 0 1px 2px rgba(40, 32, 20, 0.05), 0 22px 40px -20px rgba(40, 32, 20, 0.22);
+}
+
+/* Leaflet's default greens and blues are the one place that still felt like a different product. */
+html[data-theme="light"] .leaflet-tile-pane {
+  filter: saturate(0.8) sepia(0.06) contrast(0.98);
+}
+
+html[data-theme] {
+  scrollbar-color: color-mix(in oklab, var(--foreground) 24%, transparent) transparent;
+}
+
+@media print {
+  html[data-theme] {
+    --background: #ffffff;
+    --card: #ffffff;
+    --foreground: #1c1a15;
+  }
+  html[data-theme] body {
+    background: #ffffff;
+  }
+}

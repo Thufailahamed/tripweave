@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { ErrorState } from "@/components/ui/card";
 import { LogoMark } from "@/components/brand";
 import { useSession } from "@/lib/session";
+import "./editorial-theme.css";
 
 /** Auth gate: unauthenticated users go to /login; platform admins without a tenant go to /admin. */
 export default function AuthedLayout({ children }: { children: React.ReactNode }) {

@@ -317,7 +317,7 @@ function PackagesView() {
         />
       ) : (
         <>
-          <div className="sticky top-16 z-20 -mx-1 flex flex-wrap items-center gap-2 rounded-2xl border border-border/70 bg-card/85 p-2.5 shadow-[0_12px_40px_-24px_rgba(20,26,45,0.3)] backdrop-blur-xl">
+          <div className="sticky top-16 z-20 -mx-1 flex flex-wrap items-center gap-2 rounded-2xl border border-border/70 bg-card/85 p-2.5 shadow-[0_12px_40px_-24px_rgba(40,32,20,0.3)] backdrop-blur-xl">
             <ViewToggle view={view} onChange={setView} />
             <div className="flex flex-wrap gap-1.5">
               <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>All</FilterChip>

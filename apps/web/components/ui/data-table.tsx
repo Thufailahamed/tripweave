@@ -25,7 +25,7 @@ export function DataTable<T>({ data, columns, empty, onRowClick, meta, onPageCha
   const table = useReactTable({ data, columns, state: { sorting }, onSortingChange: setSorting, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() });
   if (data.length === 0) return <>{empty ?? <EmptyState title="Nothing here yet" />}</>;
   return (
-    <div className="tw-surface overflow-hidden rounded-2xl border border-border shadow-[0_18px_50px_-34px_rgba(20,26,45,0.28)]">
+    <div className="tw-surface overflow-hidden rounded-2xl border border-border shadow-[0_18px_50px_-34px_rgba(40,32,20,0.28)]">
       <div className="relative overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           {caption ? <caption className="sr-only">{caption}</caption> : null}

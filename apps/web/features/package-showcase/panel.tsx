@@ -109,7 +109,7 @@ export function PackageStoryPanel({
   const showStory = !!snapshot && program.length > 0;
 
   return (
-    <section aria-labelledby="package-story-heading" className="tw-planner flex min-w-0 flex-col gap-6 rounded-[28px] border border-border/70 bg-card p-5 shadow-[0_18px_50px_-32px_rgba(20,26,45,0.35)] md:p-7">
+    <section aria-labelledby="package-story-heading" className="tw-planner flex min-w-0 flex-col gap-6 rounded-[28px] border border-border/70 bg-card p-5 shadow-[0_18px_50px_-32px_rgba(40,32,20,0.35)] md:p-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="tw-eyebrow text-muted-foreground">AI package story</p>
