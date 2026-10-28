@@ -29,5 +29,13 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
       </div>
     );
   }
+  if (session.organization?.accountKind === "individual") {
+    return (
+      <div role="status" className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+        <LogoMark className="tw-spin-slow size-9 text-accent" />
+        <p className="text-sm text-muted-foreground">Opening your personal trips…</p>
+      </div>
+    );
+  }
   return <AppShell>{children}</AppShell>;
 }

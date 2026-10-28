@@ -96,6 +96,11 @@ export default function SharedTripPage() {
                     <p className="tw-travel-eyebrow">Budget shared</p>
                     <p className="tw-num mt-2 text-3xl font-semibold">{money(view.budget.totalMinor, view.budget.currency)}</p>
                     <p className="mt-1 text-[11px] text-muted-foreground">The traveller's own plan, not a payment or a quote.</p>
+                    {view.budget.excludedCurrencies.length > 0 ? (
+                      <p className="mt-2 rounded-lg bg-warning-soft px-2.5 py-2 text-[11px] leading-relaxed text-warning">
+                        Some lines are kept in {view.budget.excludedCurrencies.join(", ")} and are not included in this {view.budget.currency} total.
+                      </p>
+                    ) : null}
                     <div className="mt-4 flex flex-col gap-2">
                       {view.budget.categories.map((category) => (
                         <div key={category.category}>

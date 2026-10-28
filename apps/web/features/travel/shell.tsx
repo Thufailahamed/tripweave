@@ -36,6 +36,14 @@ export function TravelShell({ children }: { children: React.ReactNode }) {
     try {
       await apiPost("/auth/logout");
     } finally {
+      try {
+        for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+          const key = window.localStorage.key(index);
+          if (key?.startsWith("tw.traveler.plan.")) window.localStorage.removeItem(key);
+        }
+      } catch {
+        /* Storage can be unavailable; signing out still proceeds. */
+      }
       reset();
       router.replace("/travel/signin");
       setBusy(false);

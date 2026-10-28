@@ -1099,6 +1099,10 @@ html[data-theme="dark"] .tw-planner .pl-card,
   --success: #4f7a57;
   --warning: #a16a12;
   --info: #3f6f8f;
+  --destructive-soft: #f9e2de;
+  --success-soft: #e8f1e7;
+  --warning-soft: #fbefd9;
+  --info-soft: #e6f0f5;
   --sidebar: #fffdf8;
   --sidebar-foreground: #211d17;
   --pl-surface: #fffdf8;

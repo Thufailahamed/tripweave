@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -107,11 +108,19 @@ export function TravelItineraryEditor() {
 
   const suggest = async () => {
     if (suggestions.length === 0) return;
+    if (!trip.arrivalDate || !trip.departureDate) {
+      setError("Add both trip dates on the overview before suggesting a route.");
+      return;
+    }
     setSuggesting(true);
     setError(null);
     try {
-      const nights = trip.arrivalDate && trip.departureDate ? Math.max(1, Math.round((Date.parse(`${trip.departureDate}T00:00:00Z`) - Date.parse(`${trip.arrivalDate}T00:00:00Z`)) / 86_400_000)) : 3;
-      const result = await apiPost<{ stops: { destination: string; latitude: number | null; longitude: number | null; arrivalDate: string; departureDate: string; activities: string[]; notes?: string | null; id?: string }[]; suggestion?: { question?: string } }>(`/trips/${id}/itinerary/suggest`, { destinations: suggestions, nights, arrivalDate: trip.arrivalDate ?? undefined });
+      const nights = Math.max(1, Math.round((Date.parse(`${trip.departureDate}T00:00:00Z`) - Date.parse(`${trip.arrivalDate}T00:00:00Z`)) / 86_400_000));
+      const result = await apiPost<{ stops: { destination: string; latitude: number | null; longitude: number | null; arrivalDate: string; departureDate: string; activities: string[]; notes?: string | null; id?: string }[]; suggestion?: { question?: string } }>(`/trips/${id}/itinerary/suggest`, { destinations: suggestions, nights, arrivalDate: trip.arrivalDate });
+      if (result.stops.length === 0) {
+        setError("No stops came back. Add the trip dates and places, then try again.");
+        return;
+      }
       setStops(result.stops.map((stop) => ({ key: newKey(), id: stop.id, destination: stop.destination, latitude: stop.latitude, longitude: stop.longitude, arrivalDate: stop.arrivalDate, departureDate: stop.departureDate, activitiesText: (stop.activities ?? []).join("\n"), notes: stop.notes ?? "" })));
       setTitle((current) => current || "Suggested route");
       setSummary(result.suggestion?.question ?? "");
@@ -204,11 +213,16 @@ export function TravelItineraryEditor() {
           <span className="grid size-11 place-items-center rounded-full bg-accent-soft text-accent"><Sparkles className="size-5" /></span>
           <h3 className="tw-travel-display text-3xl leading-none tracking-[-0.03em]">No route yet.</h3>
           <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">Add the places you have in mind. We will suggest where to sleep based on the number of nights, and you can move or replace every stop afterwards.</p>
+          {!trip.arrivalDate || !trip.departureDate ? (
+            <p className="max-w-xl rounded-xl border border-border bg-background/60 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+              The trip needs both dates before we can suggest a route. <Link href={`/travel/trips/${id}`} className="font-semibold text-accent hover:underline">Set the dates on the overview</Link>.
+            </p>
+          ) : null}
           <div className="max-w-xl">
             <TagInput id="suggest-destinations" label="Places" value={suggestions} onChange={setSuggestions} placeholder="e.g. Kandy" suggestions={["Kandy", "Ella", "Galle", "Nuwara Eliya", "Sigiriya", "Mirissa"]} maxLength={80} />
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void suggest()} loading={suggesting} disabled={suggestions.length === 0}><Wand2 className="size-4" /> Suggest a route</Button>
+            <Button onClick={() => void suggest()} loading={suggesting} disabled={suggestions.length === 0 || !trip.arrivalDate || !trip.departureDate}><Wand2 className="size-4" /> Suggest a route</Button>
             <Button variant="outline" onClick={add}><Plus className="size-4" /> Start from a blank stop</Button>
           </div>
         </section>

@@ -82,8 +82,8 @@ export interface TravelerTripInput {
   title: string;
   idea: string;
   destinations?: string[];
-  arrivalDate: string;
-  departureDate: string;
+  arrivalDate: string | null;
+  departureDate: string | null;
   adults: number;
   children: number;
   childAges: number[];
@@ -146,41 +146,53 @@ export async function createTripFromWizard(input: TravelerTripInput, api: Wizard
   let parsed = false;
   let itineraryCreated = false;
   const destinations = input.destinations ?? [];
+  let arrivalDate = input.arrivalDate;
+  let departureDate = input.departureDate;
 
   const idea = input.idea.trim();
   if (idea.length >= 10) {
     onStage?.("parsing");
     try {
-      const result = (await api.post(`/trips/${trip.id}/parse`, { text: idea, apply: true })) as { itinerary?: { id?: string } | null; warnings?: string[] };
+      const result = (await api.post(`/trips/${trip.id}/parse`, { text: idea, apply: true })) as {
+        itinerary?: { id?: string } | null;
+        warnings?: string[];
+        trip?: { arrivalDate?: string | null; departureDate?: string | null };
+      };
       parsed = true;
       if (result.warnings?.length) warnings.push(...result.warnings);
       itineraryCreated = !!result.itinerary;
+      arrivalDate = result.trip?.arrivalDate ?? arrivalDate;
+      departureDate = result.trip?.departureDate ?? departureDate;
     } catch (error) {
       warnings.push(error instanceof Error ? error.message : "The trip idea could not be read automatically.");
     }
   }
 
   if (!itineraryCreated && destinations.length > 0) {
-    onStage?.("routing");
-    try {
-      const start = Date.parse(`${input.arrivalDate}T00:00:00Z`);
-      const end = Date.parse(`${input.departureDate}T00:00:00Z`);
-      const nights = Number.isFinite(start) && Number.isFinite(end) && end > start ? Math.round((end - start) / 86_400_000) : 1;
-      const suggestion = (await api.post(`/trips/${trip.id}/itinerary/suggest`, {
-        destinations,
-        nights,
-        arrivalDate: input.arrivalDate,
-      })) as { stops: unknown[]; suggestion?: { question?: string } };
-      if (suggestion.stops.length > 0) {
-        await api.put(`/trips/${trip.id}/itinerary`, {
-          title: "Suggested route",
-          summary: suggestion.suggestion?.question ?? "",
-          stops: suggestion.stops,
-        });
-        itineraryCreated = true;
+    if (!arrivalDate || !departureDate) {
+      warnings.push("Add both trip dates to draft a route from the places you chose.");
+    } else {
+      onStage?.("routing");
+      try {
+        const start = Date.parse(`${arrivalDate}T00:00:00Z`);
+        const end = Date.parse(`${departureDate}T00:00:00Z`);
+        const nights = Number.isFinite(start) && Number.isFinite(end) && end > start ? Math.round((end - start) / 86_400_000) : 1;
+        const suggestion = (await api.post(`/trips/${trip.id}/itinerary/suggest`, {
+          destinations,
+          nights,
+          arrivalDate,
+        })) as { stops: unknown[]; suggestion?: { question?: string } };
+        if (suggestion.stops.length > 0) {
+          await api.put(`/trips/${trip.id}/itinerary`, {
+            title: "Suggested route",
+            summary: suggestion.suggestion?.question ?? "",
+            stops: suggestion.stops,
+          });
+          itineraryCreated = true;
+        }
+      } catch (error) {
+        warnings.push(error instanceof Error ? error.message : "We could not draft a route from those places yet.");
       }
-    } catch (error) {
-      warnings.push(error instanceof Error ? error.message : "We could not draft a route from those places yet.");
     }
   }
 

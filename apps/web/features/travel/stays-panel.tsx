@@ -25,18 +25,23 @@ function VerificationLine({ pkg }: { pkg: PackageView }) {
   return <Badge tone="outline">Indicative</Badge>;
 }
 
-function StayCard({ pkg, tripId }: { pkg: PackageView; tripId: string }) {
+function StayCard({ pkg, tripId, budgetCurrency }: { pkg: PackageView; tripId: string; budgetCurrency: string }) {
   const qc = useQueryClient();
   const [adding, setAdding] = React.useState(false);
   const estimate = packageStayEstimate(pkg);
+  const mismatch = !!estimate && estimate.currency !== budgetCurrency;
   const nights = stayNights(pkg);
   const perNight = pkg.pricing && nights > 0 ? Math.round(pkg.pricing.sellingPriceMinor / nights) : null;
 
   const addToBudget = async () => {
     if (!estimate) return;
+    if (mismatch) {
+      toast.error(`This stay is priced in ${estimate.currency}, but the trip budget is in ${budgetCurrency}.`);
+      return;
+    }
     setAdding(true);
     try {
-      await apiPost(`/traveler/trips/${tripId}/budget`, { label: estimate.label, category: "stay", amountMinor: estimate.amountMinor });
+      await apiPost(`/traveler/trips/${tripId}/budget`, { label: estimate.label, category: "stay", amountMinor: estimate.amountMinor, currency: estimate.currency });
       qc.invalidateQueries({ queryKey: travelKeys.budget(tripId) });
       toast.success("Stay estimate added to the budget");
     } catch (error) {
@@ -87,10 +92,10 @@ function StayCard({ pkg, tripId }: { pkg: PackageView; tripId: string }) {
       ) : null}
 
       <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
-        <Button size="sm" variant="outline" onClick={() => void addToBudget()} loading={adding} disabled={!estimate}>
+        <Button size="sm" variant="outline" onClick={() => void addToBudget()} loading={adding} disabled={!estimate || mismatch}>
           <Wallet className="size-4" /> Add stay estimate
         </Button>
-        <span className="text-[11px] text-muted-foreground">{estimate ? `Budget line in ${estimate.currency}` : "No selling price to add"}</span>
+        <span className={`text-[11px] ${mismatch ? "text-warning" : "text-muted-foreground"}`}>{!estimate ? "No selling price to add" : mismatch ? `Priced in ${estimate.currency}; budget uses ${budgetCurrency}` : `Budget line in ${estimate.currency}`}</span>
       </div>
     </article>
   );
@@ -234,7 +239,7 @@ export function TravelStaysPanel() {
           ) : null}
           {packages.length > 0 ? (
             <div className="grid gap-5 xl:grid-cols-2">
-              {packages.map((pkg) => <StayCard key={pkg.id} pkg={pkg} tripId={id} />)}
+              {packages.map((pkg) => <StayCard key={pkg.id} pkg={pkg} tripId={id} budgetCurrency={trip.budgetCurrency} />)}
             </div>
           ) : job?.status === "infeasible" ? (
             <Alert tone="warning" title="No stay matched every requirement">

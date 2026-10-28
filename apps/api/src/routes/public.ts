@@ -53,12 +53,14 @@ publicRoutes.get("/trips/:token", rateLimit({ name: "public-trip", limit: 120, w
   if (share.includeBudget) {
     const items = await traveler.listBudgetItems(db, share.organizationId, trip.id);
     const primary = items.filter((item) => item.currency === trip.budgetCurrency);
+    const excludedCurrencies = [...new Set(items.filter((item) => item.currency !== trip.budgetCurrency).map((item) => item.currency))].sort();
     const byCategory = new Map<string, number>();
     for (const item of primary) byCategory.set(item.category, (byCategory.get(item.category) ?? 0) + item.amountMinor);
     budget = {
       currency: trip.budgetCurrency,
       totalMinor: primary.reduce((sum, item) => sum + item.amountMinor, 0),
       categories: TRAVELER_BUDGET_CATEGORIES.filter((category) => (byCategory.get(category) ?? 0) > 0).map((category) => ({ category, totalMinor: byCategory.get(category) ?? 0 })),
+      excludedCurrencies,
     };
   }
 

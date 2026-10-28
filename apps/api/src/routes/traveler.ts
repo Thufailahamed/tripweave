@@ -92,7 +92,10 @@ travelerRoutes.get("/trips/:id/budget", async (c) => {
 travelerRoutes.post("/trips/:id/budget", writeLimit, async (c) => {
   const a = getTraveler(c);
   const trip = await mustTrip(c, requireParam(c, "id"));
-  const body = await parseBody(c, travelerBudgetItemSchema);
+  const { currency: requestedCurrency, ...body } = await parseBody(c, travelerBudgetItemSchema);
+  if (requestedCurrency && requestedCurrency !== trip.budgetCurrency) {
+    throw new AppError("validation_failed", `Budget items must use the trip currency (${trip.budgetCurrency})`, { issues: [{ path: "currency", message: `This trip budgets in ${trip.budgetCurrency}, not ${requestedCurrency}` }] });
+  }
   const item = await traveler.createBudgetItem(c.get("db"), a.organizationId, trip.id, { ...body, currency: trip.budgetCurrency });
   await audit(c, "traveler.budget_created", "trip", trip.id, { itemId: item.id, category: item.category });
   return ok(c, item, 201);

@@ -6,7 +6,7 @@ import { renderProposalPdf } from "@tripweave/proposal-renderer";
 import type { Env, Vars } from "../env";
 import { randomToken, sha256Hex } from "../lib/crypto";
 import { ok, paged, parseBody, parseQuery, requireParam, type AppContext } from "../lib/http";
-import { audit, can, getTenant, rateLimit, requirePermission, requireTenant } from "../middleware/auth";
+import { audit, can, getTenant, rateLimit, requireBusiness, requirePermission } from "../middleware/auth";
 import { sendEmail } from "../services/email";
 import type { StoredPackage } from "../services/pricing";
 import { assertQuotable, assertTransition, buildVersion, clientViewFor, presentVersion, type PackageVerification } from "../services/quotes";
@@ -14,7 +14,7 @@ import { confirmQuoteForBooking } from "../services/booking-confirmation";
 import { loadPricing, requireFx } from "../services/settings";
 
 export const quoteRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
-quoteRoutes.use("*", requireTenant);
+quoteRoutes.use("*", requireBusiness);
 
 async function mustGetQuote(c: AppContext, id: string) {
   const q = await quotes.getQuote(c.get("db"), getTenant(c).organizationId, id);

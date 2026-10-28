@@ -78,6 +78,13 @@ export function getTraveler(c: AppContext): AuthContext & { organizationId: stri
   return t as AuthContext & { organizationId: string; accountKind: "individual"; role: NonNullable<AuthContext["role"]> };
 }
 
+/** Operator-only tenant surface (customers, quotations and other commercial workflows). */
+export function getBusiness(c: AppContext): AuthContext & { organizationId: string; accountKind: "business"; role: NonNullable<AuthContext["role"]> } {
+  const t = getTenant(c);
+  if (t.accountKind === "individual") throw new AppError("forbidden", "This area is not available in a personal trip workspace");
+  return t as AuthContext & { organizationId: string; accountKind: "business"; role: NonNullable<AuthContext["role"]> };
+}
+
 export const requireAuth: MiddlewareHandler<Bindings> = async (c, next) => {
   getAuth(c);
   await next();
@@ -88,6 +95,10 @@ export const requireTenant: MiddlewareHandler<Bindings> = async (c, next) => {
 };
 export const requireTraveler: MiddlewareHandler<Bindings> = async (c, next) => {
   getTraveler(c);
+  await next();
+};
+export const requireBusiness: MiddlewareHandler<Bindings> = async (c, next) => {
+  getBusiness(c);
   await next();
 };
 export function requirePermission(...perms: Permission[]): MiddlewareHandler<Bindings> {

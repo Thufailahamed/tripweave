@@ -3,10 +3,10 @@ import { AppError, customerSchema, paginationSchema } from "@tripweave/shared";
 import { trips } from "@tripweave/database";
 import type { Env, Vars } from "../env";
 import { ok, paged, parseBody, parsePatch, parseQuery, requireParam } from "../lib/http";
-import { audit, getTenant, requirePermission, requireTenant } from "../middleware/auth";
+import { audit, getTenant, requireBusiness, requirePermission } from "../middleware/auth";
 
 export const customerRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
-customerRoutes.use("*", requireTenant);
+customerRoutes.use("*", requireBusiness);
 
 customerRoutes.get("/", requirePermission("customers:read"), async (c) => paged(c, await trips.listCustomers(c.get("db"), getTenant(c).organizationId, parseQuery(c, paginationSchema))));
 

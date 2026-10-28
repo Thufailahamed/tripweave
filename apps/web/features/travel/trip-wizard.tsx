@@ -60,8 +60,6 @@ export function TripWizard() {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     const nextErrors: Record<string, string> = {};
-    if (!arrivalDate) nextErrors.arrivalDate = "Choose an arrival date.";
-    if (!departureDate) nextErrors.departureDate = "Choose a departure date.";
     if (arrivalDate && departureDate && departureDate <= arrivalDate) nextErrors.departureDate = "Departure must be after arrival.";
     if (!Number.isFinite(adults) || adults < 1) nextErrors.adults = "At least one adult.";
     const rawAges = childAges.slice(0, children);
@@ -80,8 +78,8 @@ export function TripWizard() {
         title: resolvedTitle,
         idea,
         destinations,
-        arrivalDate,
-        departureDate,
+        arrivalDate: arrivalDate || null,
+        departureDate: departureDate || null,
         adults,
         children,
         childAges: ageNumbers,
@@ -161,10 +159,10 @@ export function TripWizard() {
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Arrival" htmlFor="trip-arrival" error={errors.arrivalDate} required>
+            <Field label="Arrival" htmlFor="trip-arrival" error={errors.arrivalDate} hint="Optional; the idea can fill this in.">
               <Input id="trip-arrival" type="date" value={arrivalDate} onChange={(event) => setArrivalDate(event.target.value)} />
             </Field>
-            <Field label="Departure" htmlFor="trip-departure" error={errors.departureDate} required>
+            <Field label="Departure" htmlFor="trip-departure" error={errors.departureDate} hint="Optional">
               <Input id="trip-departure" type="date" min={arrivalDate || undefined} value={departureDate} onChange={(event) => setDepartureDate(event.target.value)} />
             </Field>
           </div>

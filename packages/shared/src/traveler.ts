@@ -113,6 +113,8 @@ export interface TravelerPublicBudget {
   currency: string;
   totalMinor: number;
   categories: { category: TravelerBudgetCategory; totalMinor: number }[];
+  /** Currencies present on the trip but not added to this total, so the reader is not misled. */
+  excludedCurrencies: string[];
 }
 
 /** The only shape a public share may expose. No ids, costs, notes, packing or account details. */
@@ -175,7 +177,7 @@ const travelerBudgetFields = {
   amountMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
   isPaid: z.boolean(),
 };
-export const travelerBudgetItemSchema = z.object({ ...travelerBudgetFields, isPaid: z.boolean().default(false) });
+export const travelerBudgetItemSchema = z.object({ ...travelerBudgetFields, currency: z.enum(SUPPORTED_CURRENCIES).optional(), isPaid: z.boolean().default(false) });
 export const travelerBudgetUpdateSchema = z
   .object(travelerBudgetFields)
   .partial()

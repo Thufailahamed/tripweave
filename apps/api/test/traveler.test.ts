@@ -42,6 +42,13 @@ describe("traveller workspaces", () => {
     const res = await business.get("/traveler/profile");
     expect(res.status).toBe(403);
   });
+
+  it("keeps personal accounts out of the operator customer and quotation APIs", async () => {
+    const h = new Harness();
+    const { c } = await travelerWithTrip(h);
+    expect((await c.get("/customers")).status).toBe(403);
+    expect((await c.get("/quotes")).status).toBe(403);
+  });
 });
 
 describe("traveller profile", () => {
@@ -69,6 +76,28 @@ describe("traveller profile", () => {
     const me = await c.ok<{ user: { displayName: string }; organization: { defaultCurrency: string } }>("GET", "/auth/me");
     expect(me.user.displayName).toBe("Maya Perera");
     expect(me.organization.defaultCurrency).toBe("EUR");
+  });
+});
+
+describe("traveller itinerary boundaries", () => {
+  it("saves a single stop that touches both trip boundaries", async () => {
+    const h = new Harness();
+    const c = await h.registerTraveler("Maya");
+    const trip = await c.ok<{ id: string }>("POST", "/trips", {
+      title: "One stop",
+      arrivalDate: "2026-12-10",
+      departureDate: "2026-12-12",
+      party: { adults: 2, children: 0, childAges: [], rooms: [{ adults: 2, children: 0 }] },
+      budgetCurrency: "USD",
+    });
+    await c.ok("PUT", `/trips/${trip.id}/itinerary`, {
+      title: "Kandy",
+      confirm: true,
+      stops: [{ destination: "Kandy", latitude: 7.2906, longitude: 80.6437, arrivalDate: "2026-12-10", departureDate: "2026-12-12", activities: ["Temple"] }],
+    });
+    const view = await c.ok<{ itinerary: { stops: unknown[]; status: string } }>("GET", `/trips/${trip.id}/itinerary`);
+    expect(view.itinerary.stops).toHaveLength(1);
+    expect(view.itinerary.status).toBe("confirmed");
   });
 });
 
@@ -101,6 +130,8 @@ describe("traveller budget", () => {
 
     const negative = await c.post(`/traveler/trips/${tripId}/budget`, { label: "Bad", category: "other", amountMinor: -1 });
     expect(negative.status).toBe(422);
+    const wrongCurrency = await c.post(`/traveler/trips/${tripId}/budget`, { label: "Euro line", category: "other", amountMinor: 1_000, currency: "EUR" });
+    expect(wrongCurrency.status).toBe(422);
 
     const other = await h.registerTraveler("Noah");
     const hidden = await other.get(`/traveler/trips/${tripId}/budget`);
@@ -109,6 +140,21 @@ describe("traveller budget", () => {
     await c.ok("DELETE", `/traveler/trips/${tripId}/budget/${created.id}`);
     const empty = await c.ok<{ items: TravelerBudgetItem[] }>("GET", `/traveler/trips/${tripId}/budget`);
     expect(empty.items).toEqual([]);
+  });
+});
+
+describe("traveller tenancy", () => {
+  it("scopes packing, notes, shares and the trip itself to the owner", async () => {
+    const h = new Harness();
+    const { c, tripId } = await travelerWithTrip(h, "Maya");
+    await c.ok("POST", `/traveler/trips/${tripId}/packing`, { label: "Passport", category: "documents" });
+    await c.ok("POST", `/traveler/trips/${tripId}/notes`, { body: "Private note" });
+    await c.ok("POST", `/traveler/trips/${tripId}/shares`, { expiresInDays: 7, includeBudget: false });
+    const other = await h.registerTraveler("Noah");
+    expect((await other.get(`/traveler/trips/${tripId}/packing`)).status).toBe(404);
+    expect((await other.get(`/traveler/trips/${tripId}/notes`)).status).toBe(404);
+    expect((await other.get(`/traveler/trips/${tripId}/shares`)).status).toBe(404);
+    expect((await other.get(`/trips/${tripId}`)).status).toBe(404);
   });
 });
 
@@ -229,6 +275,19 @@ describe("public trip sharing", () => {
     const expiring = await c.ok<{ url: string }>("POST", `/traveler/trips/${tripId}/shares`, { expiresInDays: 1, includeBudget: false });
     h.now = new Date("2026-10-29T10:00:00Z");
     expect((await anon.get(`/public/trips/${expiring.url.split("/t/")[1]!}`)).status).toBe(404);
+  });
+
+  it("does not silently add unlike currencies to the public budget total", async () => {
+    const h = new Harness();
+    const { c, tripId } = await travelerWithTrip(h);
+    await c.ok("POST", `/traveler/trips/${tripId}/budget`, { label: "Old USD line", category: "other", amountMinor: 4_500 });
+    await c.ok("PATCH", `/trips/${tripId}`, { budgetCurrency: "EUR" });
+    await c.ok("POST", `/traveler/trips/${tripId}/budget`, { label: "New EUR line", category: "other", amountMinor: 1_200 });
+    const created = await c.ok<{ url: string }>("POST", `/traveler/trips/${tripId}/shares`, { expiresInDays: 30, includeBudget: true });
+    const view = await h.client().ok<{ budget: { currency: string; totalMinor: number; excludedCurrencies: string[] } }>("GET", `/public/trips/${created.url.split("/t/")[1]!}`);
+    expect(view.budget.currency).toBe("EUR");
+    expect(view.budget.totalMinor).toBe(1_200);
+    expect(view.budget.excludedCurrencies).toEqual(["USD"]);
   });
 
   it("returns the same not-found response for unknown tokens", async () => {

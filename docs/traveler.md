@@ -19,6 +19,8 @@ A traveller registration creates:
 `staff` deliberately has `trips:read/write`, `optimisation:run`, `packages:write` and
 `hotels:read` but **not** `margins:view` or `agreements:manage`. The existing package
 presentation therefore withholds supplier cost, margin and contract data automatically.
+The operator customer and quotation routers additionally require a business workspace, so
+a personal account cannot use TripWeave to email arbitrary customers or send quotations.
 
 The session exposes `organization.accountKind`. The operator layout redirects an
 individual workspace to `/travel/trips`, and the traveller layout refuses a business
@@ -79,17 +81,21 @@ remain `candidate_combinations`. There is no second trip model.
 | `DELETE` | `/api/v1/traveler/trips/:id/shares/:shareId` | Revoke a link |
 | `GET` | `/api/v1/public/trips/:token` | Allow-listed public trip view |
 
-All private routes are scoped by the session organisation and rate-limited. A share token
-is 32 random bytes; only its SHA-256 hash is stored, and the URL is shown once. Expired,
-revoked and unknown tokens return the same 404.
+All private routes are scoped by the session organisation. Write routes are rate-limited;
+read routes rely on the session scope and the trip ownership check. A share token is 32
+random bytes; only its SHA-256 hash is stored, and the URL is shown once. Expired, revoked
+and unknown tokens return the same 404.
 
 ## Trip creation flow
 
-1. `POST /trips` with the trip-request contract (whole-trip budget, party, dates).
+1. `POST /trips` with the trip-request contract (whole-trip budget, party, optional
+   dates). Dates may be left blank; the parser can fill them from the idea.
 2. If the idea is at least ten characters, `POST /trips/:id/parse` with `apply: true`.
    The parser is the existing Workers AI/OpenAI-compatible/rule fallback path.
-3. If no itinerary exists and places were given, `POST /trips/:id/itinerary/suggest`,
-   then `PUT /trips/:id/itinerary` with the deterministic suggestion.
+3. If no itinerary exists, both dates are known and places were given,
+   `POST /trips/:id/itinerary/suggest`, then `PUT /trips/:id/itinerary` with the
+   deterministic suggestion. With missing dates the trip is still created and the
+   traveller is told what to add.
 4. Once the trip exists, a parser or route-draft failure is a warning, not a lost trip.
 
 The wizard never treats a suggested route as confirmed. The itinerary editor and the

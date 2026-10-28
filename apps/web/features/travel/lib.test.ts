@@ -175,6 +175,25 @@ describe("createTripFromWizard", () => {
     expect(result).toMatchObject({ tripId: "t1", parsed: false, itineraryCreated: false });
     expect(calls).toEqual(["POST /trips"]);
   });
+
+  it("still creates a trip when dates are missing and explains how to draft the route", async () => {
+    const calls: string[] = [];
+    const api: WizardApi = {
+      post: async (path) => {
+        calls.push(`POST ${path}`);
+        return { id: "t1" };
+      },
+      put: async (path) => {
+        calls.push(`PUT ${path}`);
+        return {};
+      },
+    };
+    const result = await createTripFromWizard({ ...wizardInput, idea: "", arrivalDate: null, departureDate: null }, api);
+    expect(result.tripId).toBe("t1");
+    expect(result.itineraryCreated).toBe(false);
+    expect(result.warnings.join(" ")).toContain("Add both trip dates");
+    expect(calls).toEqual(["POST /trips"]);
+  });
 });
 
 describe("packageStayEstimate", () => {
