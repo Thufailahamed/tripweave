@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TravelerBudgetItem, TravelerPackingItem } from "@tripweave/shared";
-import { allocateTravelerRooms, budgetTotals, daysUntil, packingProgress, travelerTripPayload, tripDestination } from "./lib";
+import { allocateTravelerRooms, budgetTotals, createTripFromWizard, daysUntil, packingProgress, travelerTripPayload, tripDestination, type WizardApi } from "./lib";
 
 const budgetItem = (over: Partial<TravelerBudgetItem>): TravelerBudgetItem => ({
   id: "b1",
@@ -95,5 +95,82 @@ describe("travelerTripPayload", () => {
     expect(payload.specialRequirements?.other).toContain("tea, trains");
     expect(payload.specialRequirements?.other).toContain("Slow and savoured");
     expect(payload.preferredHotelCategory).toBe("boutique");
+  });
+});
+
+const wizardInput = {
+  title: "Hill country",
+  idea: "Tea, trains and a little coast.",
+  destinations: ["Kandy", "Ella"],
+  arrivalDate: "2026-12-10",
+  departureDate: "2026-12-14",
+  adults: 2,
+  children: 0,
+  childAges: [],
+  budgetMinor: 180_000,
+  budgetCurrency: "USD",
+  category: "boutique",
+  pace: "balanced" as const,
+  interests: ["tea"],
+};
+
+describe("createTripFromWizard", () => {
+  it("keeps the itinerary made by the prompt parser and never overwrites it", async () => {
+    const calls: string[] = [];
+    const api: WizardApi = {
+      post: async (path) => {
+        calls.push(`POST ${path}`);
+        if (path === "/trips") return { id: "t1" };
+        if (path.endsWith("/parse")) return { itinerary: { id: "i1" }, warnings: ["Dates inferred"] };
+        throw new Error(`unexpected ${path}`);
+      },
+      put: async (path) => {
+        calls.push(`PUT ${path}`);
+        return {};
+      },
+    };
+    const result = await createTripFromWizard(wizardInput, api);
+    expect(result).toEqual({ tripId: "t1", warnings: ["Dates inferred"], parsed: true, itineraryCreated: true });
+    expect(calls).not.toContain("POST /trips/t1/itinerary/suggest");
+  });
+
+  it("still returns the trip when parsing fails, then drafts a route from destinations", async () => {
+    const calls: string[] = [];
+    const api: WizardApi = {
+      post: async (path) => {
+        calls.push(`POST ${path}`);
+        if (path === "/trips") return { id: "t1" };
+        if (path.endsWith("/parse")) throw new Error("AI is unavailable");
+        if (path.endsWith("/itinerary/suggest")) return { stops: [{ destination: "Kandy", arrivalDate: "2026-12-10", departureDate: "2026-12-12", activities: [] }], suggestion: { question: "Confirm the split?" } };
+        throw new Error(`unexpected ${path}`);
+      },
+      put: async (path) => {
+        calls.push(`PUT ${path}`);
+        return {};
+      },
+    };
+    const result = await createTripFromWizard(wizardInput, api);
+    expect(result.tripId).toBe("t1");
+    expect(result.itineraryCreated).toBe(true);
+    expect(result.warnings.join(" ")).toContain("AI is unavailable");
+    expect(calls).toContain("POST /trips/t1/itinerary/suggest");
+    expect(calls).toContain("PUT /trips/t1/itinerary");
+  });
+
+  it("does no extra writes when there is no idea and no destination", async () => {
+    const calls: string[] = [];
+    const api: WizardApi = {
+      post: async (path) => {
+        calls.push(`POST ${path}`);
+        return { id: "t1" };
+      },
+      put: async (path) => {
+        calls.push(`PUT ${path}`);
+        return {};
+      },
+    };
+    const result = await createTripFromWizard({ ...wizardInput, idea: "", destinations: [] }, api);
+    expect(result).toMatchObject({ tripId: "t1", parsed: false, itineraryCreated: false });
+    expect(calls).toEqual(["POST /trips"]);
   });
 });
