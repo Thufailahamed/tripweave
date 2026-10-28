@@ -70,7 +70,7 @@ publicRoutes.get("/trips/:token", rateLimit({ name: "public-trip", limit: 120, w
           title: itinerary.title,
           summary: itinerary.summary,
           status: itinerary.status,
-          stops: itinerary.stops.map((stop) => ({ destination: stop.destination, arrivalDate: stop.arrivalDate, departureDate: stop.departureDate, nights: stop.nights, activities: stop.activities })),
+          stops: itinerary.stops.map((stop) => ({ destination: stop.destination, latitude: stop.latitude, longitude: stop.longitude, arrivalDate: stop.arrivalDate, departureDate: stop.departureDate, nights: stop.nights, activities: stop.activities })),
         }
       : null,
     budget,

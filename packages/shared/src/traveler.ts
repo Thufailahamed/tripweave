@@ -94,6 +94,8 @@ export interface TravelerShare {
 
 export interface TravelerPublicStop {
   destination: string;
+  latitude: number | null;
+  longitude: number | null;
   arrivalDate: string;
   departureDate: string;
   nights: number;
