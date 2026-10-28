@@ -6,7 +6,7 @@ import { OBJECTIVE_LABELS } from "@tripweave/shared";
 import { PackageComparisonSchema, PackageSummarySchema, RecommendationExplanationSchema } from "@tripweave/planning-contract";
 import { money, nightsLabel, titleCase } from "@/lib/utils";
 import { resolvePlanningPackage, usePlanningSnapshot } from "../context";
-import { MissingEntity } from "../ui";
+import { IconBadge, MissingEntity, SectionHeader } from "../ui";
 import { DestinationPhoto, PhotoCreditLine } from "./destination-photo";
 
 const SUMMARY_DESCRIPTION = "Summary of one optimised package from CONTEXT, including its selling price, budget position and hotels. Pass the packageId.";
@@ -131,15 +131,7 @@ export const PackageComparison = defineComponent({
     const selected = packages.find((pkg) => pkg.id === selectedId) ?? packages[0]!;
     return (
       <section aria-label="Package comparison" className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <p className="pl-eyebrow">
-              <span aria-hidden className="size-1.5 rounded-full bg-[var(--pl-accent)]" /> Choose a pace
-            </p>
-            <h3 className="pl-display mt-1 text-[1.9rem] leading-none">Ways to take this trip</h3>
-          </div>
-          <span className="pl-chip">{packages.length} server-priced option{packages.length === 1 ? "" : "s"}</span>
-        </div>
+        <SectionHeader icon={Layers} eyebrow="Choose a pace" title="Ways to take this trip" meta={<span className="pl-chip">{packages.length} server-priced option{packages.length === 1 ? "" : "s"}</span>} />
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)]">
           <div className="flex gap-2 overflow-x-auto pb-1 pl-scroll lg:flex-col lg:overflow-visible lg:pb-0" role="tablist" aria-label="Packages">
@@ -247,9 +239,7 @@ export const RecommendationExplanation = defineComponent({
       <section aria-label="Why this package" className="pl-card overflow-hidden">
         <div className="p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="pl-eyebrow">
-              <Sparkles className="size-3" aria-hidden /> Why this one
-            </p>
+            <div className="flex items-center gap-2.5"><IconBadge icon={Sparkles} size="sm" /><p className="pl-eyebrow">Why this one</p></div>
             <span className="pl-chip pl-chip-sage">Grounded in server facts</span>
           </div>
           <h3 className="pl-display mt-2 max-w-xl text-[2rem] leading-[1.02]">

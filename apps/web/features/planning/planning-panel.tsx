@@ -3,7 +3,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Renderer } from "@openuidev/react-lang";
-import { ArrowUp, Compass, Layers, Lightbulb, ListChecks, MessageSquare, RefreshCw, Sparkles, Square } from "lucide-react";
+import { ArrowUp, MessageSquare, RefreshCw, Sparkles, Square } from "lucide-react";
 import { toast } from "sonner";
 import type { PlanningSnapshot, PlanningStarter } from "@tripweave/planning-contract";
 import { Alert, Badge, Card, CardContent, ErrorState, LoadingBlock } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { dateRange } from "@/lib/utils";
 import { PlanningProvider } from "./context";
 import { PlanningFallbackView } from "./fallback-view";
 import { getPlanningLibrary } from "./library";
+import { PlannerWelcome } from "./welcome";
 import { applyClarificationAnswers, fetchPlanningContext, streamPlanningTurn } from "./use-planning-stream";
 
 interface Turn {
@@ -31,14 +32,6 @@ interface Turn {
 
 function newId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function starterIcon(label: string) {
-  if (/missing|ask/i.test(label)) return ListChecks;
-  if (/package|compare|value/i.test(label)) return Layers;
-  if (/why|explain|recommend/i.test(label)) return Lightbulb;
-  if (/next|itinerary|summar/i.test(label)) return Compass;
-  return Sparkles;
 }
 
 class GeneratedInterfaceBoundary extends React.Component<{ snapshot: PlanningSnapshot; children: React.ReactNode }, { failed: boolean }> {
@@ -262,41 +255,8 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
             {streaming ? "The assistant is composing a response." : messages.length > 0 ? "Response complete." : "Ready for a planning request."}
           </p>
 
-          {messages.length === 0 ? (
-            <div className="tw-planner overflow-hidden p-5 sm:p-7">
-              <p className="pl-eyebrow">
-                <span aria-hidden className="size-1.5 rounded-full bg-[var(--pl-accent)]" /> Generated on demand
-              </p>
-              <h3 className="pl-display mt-2 max-w-lg text-[2.4rem] leading-[0.96] sm:text-[3rem]">What shall we plan next?</h3>
-              <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-[var(--pl-muted)]">
-                I can compose a summary, compare packages, explain a recommendation or gather the missing details. Every layout is built for this request; every number comes from your saved trip.
-              </p>
-              <div className="mt-5 grid gap-2 sm:grid-cols-2">
-                {visibleStarters.map((starter, index) => {
-                  const Icon = starterIcon(starter.label);
-                  return (
-                    <button
-                      key={starter.label}
-                      type="button"
-                      aria-label={starter.label}
-                      disabled={!snapshot}
-                      onClick={() => void send(starter.prompt)}
-                      className="pl-card pl-rise group flex items-center gap-3 px-4 py-3 text-left transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{ "--i": index } as React.CSSProperties}
-                    >
-                      <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--pl-surface-2)] text-[var(--pl-accent)] transition group-hover:bg-[var(--pl-accent-soft)]">
-                        <Icon className="size-4" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[13px] font-semibold">{starter.label}</span>
-                        <span className="block truncate text-[10px] text-[var(--pl-muted)]">{starter.prompt}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="pl-hand mt-4">nothing is booked or changed without you</p>
-            </div>
+          {messages.length === 0 && snapshot ? (
+            <PlannerWelcome snapshot={snapshot} starters={visibleStarters} disabled={!snapshot} onAsk={(prompt) => void send(prompt)} />
           ) : null}
 
           <div className="flex flex-col gap-5" aria-label="Planning conversation">

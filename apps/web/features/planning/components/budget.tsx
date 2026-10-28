@@ -5,7 +5,7 @@ import { ArrowDownRight, ArrowUpRight, CircleCheck, TriangleAlert, Wallet } from
 import { BudgetMeterSchema } from "@tripweave/planning-contract";
 import { money } from "@/lib/utils";
 import { resolvePlanningPackage, usePlanningSnapshot } from "../context";
-import { MissingEntity } from "../ui";
+import { IconBadge, MissingEntity } from "../ui";
 
 const DESCRIPTION = "Visual budget position for one package from CONTEXT: selling price against the trip budget, with a total/per-person switch. Pass the packageId. Use it when the user asks whether a package fits the budget.";
 
@@ -33,9 +33,7 @@ export const BudgetMeter = defineComponent({
       <section aria-label={`Budget position for package ${pkg.number}`} className="pl-card p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="pl-eyebrow">
-              <Wallet className="size-3" aria-hidden /> Budget position
-            </p>
+            <div className="flex items-center gap-2.5"><IconBadge icon={Wallet} size="sm" /><p className="pl-eyebrow">Budget position</p></div>
             <p className="pl-display mt-1.5 text-[2rem] leading-none">{money(amount, pricing.currency)}</p>
             <p className="mt-1 text-xs text-[var(--pl-muted)]">
               {mode === "person" ? "per person" : "total selling price"} · package #{pkg.number}

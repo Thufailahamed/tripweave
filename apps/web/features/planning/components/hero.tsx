@@ -42,7 +42,7 @@ export const TripHero = defineComponent({
             ) : null}
           </div>
           <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
-            <p className="pl-eyebrow text-white/90 [text-shadow:0_1px_14px_rgba(0,0,0,0.6)]">Your trip, composed from live data</p>
+            <p className="pl-eyebrow [text-shadow:0_1px_14px_rgba(0,0,0,0.6)]" style={{ color: "rgba(255,255,255,0.9)" }}>Your trip, composed from live data</p>
             <h3 className="pl-display mt-2 max-w-3xl text-[2.4rem] leading-[0.94] text-white [text-shadow:0_2px_24px_rgba(0,0,0,0.45)] sm:text-[3.4rem]">{trip.title}</h3>
             <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-white/90 [text-shadow:0_1px_10px_rgba(0,0,0,0.5)]">
               <span className="tw-num inline-flex items-center gap-1.5">

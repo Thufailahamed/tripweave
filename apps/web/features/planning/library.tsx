@@ -11,6 +11,7 @@ import { HotelCard, HotelComparison } from "./components/hotels";
 import { PackageComparison, PackageSummary, RecommendationExplanation } from "./components/packages";
 import { TripRequirementSummary } from "./components/requirements";
 import { RouteSummary } from "./components/routes";
+import { TripMap } from "./components/map";
 import { DestinationTimeline } from "./components/timeline";
 
 type PlanningLibrary = ReturnType<typeof createLibrary>;
@@ -31,6 +32,7 @@ export function getPlanningLibrary(): PlanningLibrary {
       TripRequirementSummary,
       ClarificationForm,
       DestinationTimeline,
+      TripMap,
       HotelCard,
       HotelComparison,
       PackageSummary,

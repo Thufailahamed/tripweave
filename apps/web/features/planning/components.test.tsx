@@ -43,6 +43,40 @@ describe("OpenUI planning components", () => {
     expect(getPlanningLibrary().toJSONSchema()).toEqual(getPlanningJSONSchema());
   });
 
+  it("lets the guest step through the route and shows the hotels that stay at each stop", async () => {
+    renderProgram(`root = PlanningCanvas("The route", [timeline])\ntimeline = DestinationTimeline("itinerary_1")`);
+    const rail = await screen.findByRole("tablist", { name: "Stops in order" });
+    const panel = screen.getByRole("tabpanel");
+    expect(within(panel).getByText("Lakeside Heritage Kandy")).toBeInTheDocument();
+    expect(within(panel).queryByText("Tea Estate Bungalow")).not.toBeInTheDocument();
+    fireEvent.click(within(rail).getByRole("tab", { name: /Nuwara Eliya/ }));
+    await waitFor(() => expect(within(screen.getByRole("tabpanel")).getByText("Tea Estate Bungalow")).toBeInTheDocument());
+    expect(within(screen.getByRole("tabpanel")).queryByText("Lakeside Heritage Kandy")).not.toBeInTheDocument();
+    fireEvent.keyDown(rail, { key: "ArrowLeft" });
+    await waitFor(() => expect(within(screen.getByRole("tabpanel")).getByText("Lakeside Heritage Kandy")).toBeInTheDocument());
+  });
+
+  it("plots the stops on the map and lets the guest select one to explore", async () => {
+    renderProgram(`root = PlanningCanvas("Where", [map])\nmap = TripMap("itinerary_1")`);
+    const jump = await screen.findByRole("group", { name: "Jump to a stop on the map" });
+    expect(within(jump).getByRole("button", { name: /Kandy/ })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(jump).getByRole("button", { name: /Nuwara Eliya/ }));
+    await waitFor(() => expect(within(jump).getByRole("button", { name: /Nuwara Eliya/ })).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.getByRole("region", { name: "Map of the itinerary stops" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Route line on/ }));
+    expect(screen.getByRole("button", { name: /Route line off/ })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("sorts and filters hotel comparisons without changing the server data", async () => {
+    renderProgram(`root = PlanningCanvas("Stays", [comparison])\ncomparison = HotelComparison(["offer_1", "offer_2"])`);
+    const controls = await screen.findByRole("group", { name: "Sort and filter hotels" });
+    fireEvent.click(within(controls).getByRole("button", { name: "Lowest price" }));
+    expect(within(controls).getByRole("button", { name: "Lowest price" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(controls).getByText("2 of 2 stays")).toBeInTheDocument();
+    fireEvent.click(within(controls).getByRole("button", { name: "Show refundable only" }));
+    expect(within(controls).getByRole("button", { name: "Refundable only" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("renders the editorial blocks from the snapshot", async () => {
     renderProgram(richProgram);
     expect(await screen.findByText("Trip overview")).toBeInTheDocument();

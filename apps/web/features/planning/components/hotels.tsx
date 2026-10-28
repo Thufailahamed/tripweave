@@ -1,12 +1,12 @@
 "use client";
 import * as React from "react";
 import { defineComponent } from "@openuidev/react-lang";
-import { Car, Coffee, Dumbbell, MapPin, Sparkles, Star, TreePalm, UtensilsCrossed, Waves, Wifi } from "lucide-react";
+import { BedDouble, Car, Coffee, Dumbbell, MapPin, Sparkles, Star, TreePalm, UtensilsCrossed, Waves, Wifi } from "lucide-react";
 import { HotelCardSchema, HotelComparisonSchema } from "@tripweave/planning-contract";
 import { cancellationText } from "@/features/trips/availability-badge";
 import { formatDate, mealLabel, money, nightsLabel, titleCase } from "@/lib/utils";
 import { resolvePlanningOffer, resolvePlanningPackage, usePlanningSnapshot } from "../context";
-import { MissingEntity } from "../ui";
+import { MissingEntity, SectionHeader } from "../ui";
 import { DestinationPhoto, PhotoCreditLine } from "./destination-photo";
 
 const HOTEL_CARD_DESCRIPTION = "One hotel offer from CONTEXT with authoritative price, room, meal plan, cancellation and availability. Pass an offerId and, optionally, the packageId it came from.";
@@ -128,22 +128,59 @@ export const HotelComparison = defineComponent({
   component: function HotelComparisonView({ props }) {
     const snapshot = usePlanningSnapshot();
     const entries = props.offerIds.map((offerId) => resolvePlanningOffer(snapshot, offerId)).filter((entry): entry is NonNullable<typeof entry> => !!entry);
+    const [sort, setSort] = React.useState<"match" | "price" | "rating">("match");
+    const [refundableOnly, setRefundableOnly] = React.useState(false);
     if (entries.length === 0) return <MissingEntity what="hotel comparison" />;
-    const prices = entries.map((entry) => entry.offer.totalAmountMinor).filter((value): value is number => typeof value === "number");
+    const visible = entries
+      .filter((entry) => !refundableOnly || entry.offer.cancellation.refundable === true)
+      .sort((a, b) => {
+        if (sort === "price") return (a.offer.totalAmountMinor ?? Infinity) - (b.offer.totalAmountMinor ?? Infinity);
+        if (sort === "rating") return (b.offer.property.reviewScore ?? -1) - (a.offer.property.reviewScore ?? -1);
+        return 0;
+      });
+    const prices = visible.map((entry) => entry.offer.totalAmountMinor).filter((value): value is number => typeof value === "number");
     const cheapest = prices.length > 1 ? Math.min(...prices) : null;
+    const sortOptions: { value: "match" | "price" | "rating"; label: string }[] = [
+      { value: "match", label: "Best match" },
+      { value: "price", label: "Lowest price" },
+      { value: "rating", label: "Top rated" },
+    ];
     return (
       <section aria-label="Hotel comparison" className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <p className="pl-eyebrow">
-              <span aria-hidden className="size-1.5 rounded-full bg-[var(--pl-accent)]" /> Side by side
-            </p>
-            <h3 className="pl-display mt-1 text-[1.9rem] leading-none">Which stay fits?</h3>
+        <SectionHeader icon={BedDouble} eyebrow="Side by side" title="Which stay fits?" meta={<span className="pl-chip">Rates and availability exactly as returned</span>} />
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Sort and filter hotels">
+          <div className="flex rounded-full border border-[var(--pl-line)] bg-[var(--pl-surface)] p-0.5">
+            {sortOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={sort === option.value}
+                onClick={() => setSort(option.value)}
+                className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${sort === option.value ? "bg-[var(--pl-ink)] text-[var(--pl-bg)]" : "text-[var(--pl-muted)] hover:text-[var(--pl-ink)]"}`}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
-          <span className="pl-chip">Rates and availability exactly as returned</span>
+          <button
+            type="button"
+            aria-pressed={refundableOnly}
+            onClick={() => setRefundableOnly((value) => !value)}
+            className={`pl-chip cursor-pointer transition ${refundableOnly ? "pl-chip-sage" : "hover:border-[var(--pl-ink)]"}`}
+          >
+            {refundableOnly ? "Refundable only" : "Show refundable only"}
+          </button>
+          <span className="text-[11px] text-[var(--pl-muted)]">
+            {visible.length} of {entries.length} stays
+          </span>
         </div>
+        {visible.length === 0 ? (
+          <p role="status" className="pl-card p-4 text-[13px] text-[var(--pl-muted)]">
+            No stay in this comparison has free cancellation. Turn off the filter to see every option.
+          </p>
+        ) : null}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {entries.map((entry, index) => {
+          {visible.map((entry, index) => {
             const offer = entry.offer;
             const best = cheapest !== null && offer.totalAmountMinor === cheapest;
             return (
@@ -194,7 +231,7 @@ export const HotelComparison = defineComponent({
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry) => {
+                {visible.map((entry) => {
                   const offer = entry.offer;
                   return (
                     <tr key={entry.offerId} className="border-t border-[var(--pl-line)] align-top">

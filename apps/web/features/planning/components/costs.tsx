@@ -5,7 +5,7 @@ import { Info, Receipt } from "lucide-react";
 import { CostBreakdownSchema } from "@tripweave/planning-contract";
 import { money, percentFromBp } from "@/lib/utils";
 import { resolvePlanningPackage, usePlanningSnapshot } from "../context";
-import { MissingEntity } from "../ui";
+import { IconBadge, MissingEntity } from "../ui";
 
 const DESCRIPTION = "Authoritative cost breakdown for one package from CONTEXT. Internal cost and margin lines appear only when the viewer is authorised. Pass the packageId.";
 
@@ -30,9 +30,7 @@ export const CostBreakdown = defineComponent({
     if (!pricing) {
       return (
         <section className="pl-card p-5">
-          <p className="pl-eyebrow">
-            <Receipt className="size-3" aria-hidden /> Cost breakdown
-          </p>
+          <div className="flex items-center gap-2.5"><IconBadge icon={Receipt} size="sm" /><p className="pl-eyebrow">Cost breakdown</p></div>
           <p role="status" className="mt-2 text-sm text-[var(--pl-muted)]">
             Pricing is unavailable for this package. Re-price it on the packages page before creating a quotation.
           </p>
@@ -45,9 +43,7 @@ export const CostBreakdown = defineComponent({
         <div className="p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <p className="pl-eyebrow">
-                <Receipt className="size-3" aria-hidden /> The receipt
-              </p>
+              <div className="flex items-center gap-2.5"><IconBadge icon={Receipt} size="sm" /><p className="pl-eyebrow">The receipt</p></div>
               <h3 className="pl-display mt-1 text-[1.9rem] leading-none">What the price includes</h3>
             </div>
             <span className="pl-chip">Package #{pkg.number}</span>

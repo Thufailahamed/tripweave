@@ -6,7 +6,7 @@ import { RouteSummarySchema } from "@tripweave/planning-contract";
 import { minutesLabel } from "@/lib/utils";
 import { routeSourceLabel } from "@/features/trips/types";
 import { resolvePlanningItinerary, resolvePlanningPackage, usePlanningSnapshot } from "../context";
-import { MissingEntity } from "../ui";
+import { IconBadge, MissingEntity } from "../ui";
 
 const DESCRIPTION = "Travel legs and total drive time for the itinerary or a package from CONTEXT. Pass itineraryId, packageId, or both.";
 
@@ -35,9 +35,7 @@ export const RouteSummary = defineComponent({
       <section aria-label="Travel between stops" className="pl-card p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <p className="pl-eyebrow">
-              <Route className="size-3" aria-hidden /> On the road
-            </p>
+            <div className="flex items-center gap-2.5"><IconBadge icon={Route} size="sm" /><p className="pl-eyebrow">On the road</p></div>
             <h3 className="pl-display mt-1 text-[1.9rem] leading-none">Getting between stops</h3>
           </div>
           <div className="flex flex-wrap gap-1.5">

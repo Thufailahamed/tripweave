@@ -17,6 +17,7 @@ describe("planning contract", () => {
       "TripRequirementSummary",
       "ClarificationForm",
       "DestinationTimeline",
+      "TripMap",
       "HotelCard",
       "HotelComparison",
       "PackageSummary",

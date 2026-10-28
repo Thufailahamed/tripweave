@@ -12,6 +12,7 @@ export const PLANNING_COMPONENT_NAMES = [
   "TripRequirementSummary",
   "ClarificationForm",
   "DestinationTimeline",
+  "TripMap",
   "HotelCard",
   "HotelComparison",
   "PackageSummary",
@@ -61,6 +62,16 @@ const ClarificationForm = define(
   "ClarificationForm",
   "Interactive form for the open clarification questions computed by the backend. Use only when CONTEXT.questions is not empty. Never invent fields or options.",
   ClarificationFormSchema,
+);
+
+const TripMapSchema = z.object({
+  itineraryId: refIdSchema,
+});
+export { TripMapSchema };
+const TripMap = define(
+  "TripMap",
+  "Interactive map of the itinerary's stops in order, joined by a route line, with each stop's photograph and a select-to-explore card. Pass the itineraryId from CONTEXT. Use it for questions about where places are, the geography or the route.",
+  TripMapSchema,
 );
 
 const DestinationTimelineSchema = z.object({
@@ -171,6 +182,7 @@ const PlanningCanvasSchema = z.object({
       TripRequirementSummary.ref,
       ClarificationForm.ref,
       DestinationTimeline.ref,
+      TripMap.ref,
       HotelCard.ref,
       HotelComparison.ref,
       PackageSummary.ref,
@@ -197,6 +209,7 @@ export const planningComponents = [
   TripRequirementSummary,
   ClarificationForm,
   DestinationTimeline,
+  TripMap,
   HotelCard,
   HotelComparison,
   PackageSummary,
@@ -226,8 +239,11 @@ export const planningComponentGroups = [
   },
   {
     name: "Itinerary & routes",
-    components: ["DestinationTimeline", "RouteSummary"],
-    notes: ["Use destination/route blocks only when CONTEXT.itinerary exists, and pass its ID. DestinationTimeline renders the destination photography."],
+    components: ["DestinationTimeline", "TripMap", "RouteSummary"],
+    notes: [
+      "Use destination/route blocks only when CONTEXT.itinerary exists, and pass its ID. DestinationTimeline renders the destination photography.",
+      "TripMap shows where the stops are on a map. Pair it with DestinationTimeline for a map-and-stops overview.",
+    ],
   },
   {
     name: "Hotels, packages & budget",

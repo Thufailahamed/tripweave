@@ -71,3 +71,63 @@ export function VerificationBadge({ pkg }: { pkg: { verification: Record<string,
   if (verification.status === "failed") return <Badge tone="warning">Live check failed</Badge>;
   return <Badge tone="neutral">Indicative</Badge>;
 }
+
+export type PlanningTone = "accent" | "sage" | "ink";
+
+const TONE_CLASS: Record<PlanningTone, string> = {
+  accent: "bg-[var(--pl-accent-soft)] text-[var(--pl-accent)]",
+  sage: "bg-[var(--pl-sage-soft)] text-[var(--pl-sage)]",
+  ink: "bg-[var(--pl-surface-2)] text-[var(--pl-ink)]",
+};
+
+/** Rounded icon tile used by every generated block, so icons share one size, tint and shape. */
+export function IconBadge({ icon: Icon, tone = "accent", size = "md", className }: { icon: React.ComponentType<{ className?: string }>; tone?: PlanningTone; size?: "sm" | "md"; className?: string }) {
+  return (
+    <span aria-hidden className={cn("grid shrink-0 place-items-center", size === "sm" ? "size-7 rounded-lg" : "size-9 rounded-xl", TONE_CLASS[tone], className)}>
+      <Icon className={size === "sm" ? "size-3.5" : "size-4"} />
+    </span>
+  );
+}
+
+/** Heading row shared by the generated blocks: icon, eyebrow, serif title on the left; chips or actions on the right. */
+export function SectionHeader({
+  eyebrow,
+  title,
+  icon,
+  tone = "accent",
+  meta,
+  className,
+}: {
+  eyebrow: React.ReactNode;
+  title: React.ReactNode;
+  icon?: React.ComponentType<{ className?: string }>;
+  tone?: PlanningTone;
+  meta?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex flex-wrap items-center justify-between gap-x-3 gap-y-2", className)}>
+      <div className="flex min-w-0 items-center gap-3">
+        {icon ? <IconBadge icon={icon} tone={tone} /> : null}
+        <div className="min-w-0">
+          <p className="pl-eyebrow">{eyebrow}</p>
+          <h3 className="pl-display mt-1 text-[1.75rem] leading-none sm:text-[1.9rem]">{title}</h3>
+        </div>
+      </div>
+      {meta ? <div className="flex flex-wrap items-center gap-1.5">{meta}</div> : null}
+    </div>
+  );
+}
+
+/** Labelled fact with an icon badge. Used in definition lists, so the root is a div around a dt and dd. */
+export function StatTile({ icon, label, children, tone = "accent" }: { icon: React.ComponentType<{ className?: string }>; label: string; children: React.ReactNode; tone?: PlanningTone }) {
+  return (
+    <div className="flex h-full items-start gap-3 rounded-2xl border border-[var(--pl-line)] bg-[var(--pl-surface)] p-3.5">
+      <IconBadge icon={icon} tone={tone} size="sm" />
+      <div className="min-w-0">
+        <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--pl-muted)]">{label}</dt>
+        <dd className="mt-1 text-[13px] leading-snug">{children}</dd>
+      </div>
+    </div>
+  );
+}
