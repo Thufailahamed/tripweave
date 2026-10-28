@@ -1,9 +1,61 @@
 import type { PlanningHotelOffer, PlanningPackageView } from "@tripweave/planning-contract";
-import { inventory, type trips } from "@tripweave/database";
+import { inventory, trips, type Db } from "@tripweave/database";
+import { formatMoney } from "@tripweave/shared";
 import type { AppContext } from "../lib/http";
 import { getTenant } from "../middleware/auth";
 import { presentPackage, priceStoredPackage, type StoredPackage } from "./pricing";
 import { loadPricing, requireFx } from "./settings";
+
+export interface RunBudget {
+  amountMinor: number;
+  currency: string;
+}
+
+/**
+ * The budget each optimisation run compared its packages against, resolved the way the optimiser does:
+ * the run's own budget when it set one, otherwise the trip budget for accommodation-only budgets. A
+ * whole-trip budget is not compared, so its runs have no budget. Null means no comparison.
+ */
+async function runBudgets(db: Db, organizationId: string, jobIds: string[]): Promise<Map<string, RunBudget | null>> {
+  const budgets = new Map<string, RunBudget | null>();
+  for (const jobId of jobIds) {
+    const job = await trips.getJobUnscoped(db, jobId);
+    const trip = job ? await trips.getTrip(db, organizationId, job.tripRequestId) : null;
+    if (!job || !trip) {
+      budgets.set(jobId, null);
+      continue;
+    }
+    const constraints = ((job.request as { constraints?: { budgetAmountMinor?: number | null; budgetCurrency?: string } } | null)?.constraints ?? {});
+    let amountMinor = constraints.budgetAmountMinor ?? null;
+    if (amountMinor === null && trip.budgetAmountMinor !== null && trip.budgetScope === "accommodation_only") amountMinor = trip.budgetAmountMinor;
+    budgets.set(jobId, amountMinor === null ? null : { amountMinor, currency: constraints.budgetCurrency ?? trip.budgetCurrency });
+  }
+  return budgets;
+}
+
+const BUDGET_SENTENCE = /(?:under|over) the stated budget\.$/;
+
+/**
+ * The optimiser wrote the budget comparison at run time, but prices and budgets can change afterwards.
+ * This re-derives the comparison from the selling price shown and the budget now set, and rewrites only
+ * the budget sentence in the explanation. Costs, stays and any edits made since the run are left as they are.
+ */
+export function withCurrentBudget(rec: trips.PackageRecord, selling: { sellingPriceMinor: number; currency: string }, budget: RunBudget | null): trips.PackageRecord {
+  const pkg = rec.package as unknown as Record<string, unknown> & { explanation?: string[]; budgetDifferenceMinor: number | null; withinBudget: boolean | null };
+  const comparable = budget !== null && budget.currency === selling.currency;
+  const budgetDifferenceMinor = comparable ? budget.amountMinor - selling.sellingPriceMinor : null;
+  const withinBudget = comparable ? selling.sellingPriceMinor <= budget.amountMinor : null;
+  const sentence = budgetDifferenceMinor === null ? null : `${formatMoney(Math.abs(budgetDifferenceMinor), selling.currency)} ${budgetDifferenceMinor >= 0 ? "under" : "over"} the stated budget.`;
+  const explanation = [...(pkg.explanation ?? [])];
+  const at = explanation.findIndex((line) => BUDGET_SENTENCE.test(line));
+  if (at >= 0) {
+    if (sentence) explanation[at] = sentence;
+    else explanation.splice(at, 1);
+  } else if (sentence) {
+    explanation.splice(Math.min(1, explanation.length), 0, sentence);
+  }
+  return { ...rec, package: { ...pkg, budgetDifferenceMinor, withinBudget, explanation } };
+}
 
 /**
  * Shapes a set of stored packages for staff display (selling price always, internal costs only with
@@ -20,6 +72,7 @@ export async function presentPackageList(c: AppContext, records: trips.PackageRe
     return pkg.selections.map((s) => s.offer.property.id);
   });
   const coverImages = await inventory.firstImagesFor(db, [...new Set(propertyIds)]);
+  const budgets = await runBudgets(db, a.organizationId, [...new Set(records.map((r) => r.jobId))]);
   return Promise.all(
     records.map(async (r) => {
       let priced = null;
@@ -30,7 +83,8 @@ export async function presentPackageList(c: AppContext, records: trips.PackageRe
       } catch {
         priced = null; // surfaced to the UI as "pricing unavailable"; the cost data is still shown
       }
-      const shown = presentPackage(r, rights, priced);
+      const current = priced ? withCurrentBudget(r, priced, budgets.get(r.jobId) ?? null) : r;
+      const shown = presentPackage(current, rights, priced);
       return {
         ...shown,
         package: {

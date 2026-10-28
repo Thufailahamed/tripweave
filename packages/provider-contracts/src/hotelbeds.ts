@@ -121,6 +121,10 @@ export class HotelbedsProvider implements HotelProvider {
     const c = parseCategory(h.categoryName);
     const taxes = rate.taxes?.taxes ?? [];
     const taxMinor = taxes.length ? Math.round(taxes.reduce((s, t) => s + Number(t.amount ?? 0), 0) * 100) : null;
+    // Taxes Hotelbeds lists as not included are payable on top of the net rate, so they are part of the cost.
+    const notIncluded = taxes.filter((t) => t.included === false && (!t.currency || t.currency === (h.currency ?? "EUR")));
+    const notIncludedMinor = notIncluded.length ? Math.round(notIncluded.reduce((s, t) => s + Number(t.amount ?? 0), 0) * 100) : 0;
+    const taxesIncluded = rate.taxes?.allIncluded === false && notIncluded.length === 0 ? null : rate.taxes?.allIncluded === false ? true : rate.taxes?.allIncluded ?? null;
     const rooms = rate.rooms ?? input.party.rooms.length;
     const policies = rate.cancellationPolicies ?? [];
     const refundable = rate.rateClass === "NRF" ? false : rate.rateClass === "NOR" ? true : null;
@@ -132,8 +136,8 @@ export class HotelbedsProvider implements HotelProvider {
       property: { id: String(h.code), name: h.name, destination: h.destinationName ?? input.destination, latitude: h.latitude ? Number(h.latitude) : null, longitude: h.longitude ? Number(h.longitude) : null, category: c.category, starRating: c.stars, reviewScore: null, amenities: [], ownerOrganizationId: null },
       roomType: { id: null, name: room.name ?? room.code ?? "Room", maxOccupancy: (rate.adults ?? 2) + (rate.children ?? 0), maxAdults: rate.adults ?? 2 },
       stayStart: input.checkIn, stayEnd: input.checkOut, nights: nightsBetween(input.checkIn, input.checkOut), mealPlan: BOARD[rate.boardCode ?? "RO"] ?? "RO",
-      roomsRequired: rooms, occupancy: input.party, totalAmountMinor: Math.round(net * 100), currency, taxAmountMinor: taxMinor, feeAmountMinor: null,
-      taxesIncluded: rate.taxes?.allIncluded ?? null,
+      roomsRequired: rooms, occupancy: input.party, totalAmountMinor: Math.round(net * 100) + notIncludedMinor, currency, taxAmountMinor: taxMinor, feeAmountMinor: null,
+      taxesIncluded,
       cancellation: { refundable, freeCancellationUntil: refundable && policies[0]?.from ? policies[0].from.slice(0, 10) : null, penaltyDescription: policies[0]?.amount ? `Penalty from ${policies[0].from?.slice(0, 10)}: ${policies[0].amount} ${currency}` : null },
       payment: { type: rate.paymentType === "AT_HOTEL" ? "pay_at_hotel" : rate.paymentType === "AT_WEB" ? "pay_now" : "unknown" },
       retrievedAt, expiresAt: null,

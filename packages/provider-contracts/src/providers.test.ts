@@ -152,6 +152,14 @@ describe("HotelbedsProvider", () => {
     expect(b!.payment.type).toBe("pay_at_hotel");
   });
 
+  it("counts taxes Hotelbeds lists as not included in the cost, so the quotation covers them", async () => {
+    const response = structuredClone(hbResponse);
+    response.hotels.hotels[0]!.rooms[0]!.rates = [{ rateKey: "RK-4", rateClass: "NOR", rateType: "BOOKABLE", net: "200.00", allotment: 3, paymentType: "AT_WEB", boardCode: "BB", rooms: 1, adults: 2, children: 0, cancellationPolicies: [], taxes: { taxes: [{ included: false, amount: "25.00", currency: "USD" }, { included: true, amount: "5.00", currency: "USD" }], allIncluded: false } }];
+    const { f } = hbFetch(() => json(response));
+    const [offer] = await hb(f).getAvailability(input);
+    expect(offer).toMatchObject({ totalAmountMinor: 22_500, taxAmountMinor: 3_000, taxesIncluded: true });
+  });
+
   it("price check upgrades verification to live_checked and reports price changes", async () => {
     const checkResponse = (net: string) => ({ hotel: { ...hbResponse.hotels.hotels[0], rooms: [{ code: "DBL.ST", name: "Double Standard", rates: [{ ...hbResponse.hotels.hotels[0]!.rooms[0]!.rates[0]!, net }] }] } });
     const { f: same } = hbFetch((url) => (url.endsWith("/checkrates") ? json(checkResponse("210.50")) : json(hbResponse)));
@@ -244,7 +252,8 @@ describe("AmadeusProvider", () => {
     expect(a!.payment.type).toBe("pay_at_hotel");
     expect(a!.cancellation).toMatchObject({ refundable: true, freeCancellationUntil: "2026-12-05" });
     expect(a!.nightlyRates).toEqual([{ date: "2026-12-10", amountMinor: 10_525 }, { date: "2026-12-11", amountMinor: 10_525 }]);
-    expect(b).toMatchObject({ taxesIncluded: false, mealPlan: "RO" });
+    // The 15.00 tax is not included in the 180.00 base price, so the payable cost is 195.00.
+    expect(b).toMatchObject({ taxesIncluded: true, totalAmountMinor: 19_500, taxAmountMinor: 1_500, mealPlan: "RO" });
     expect(b!.payment.type).toBe("pay_now");
     expect(b!.cancellation.refundable).toBe(false);
     expect(b!.providerMetadata).toMatchObject({ taxesNotIncludedPerRoomMinor: 1_500 });
