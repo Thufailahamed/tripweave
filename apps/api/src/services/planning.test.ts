@@ -214,6 +214,23 @@ next = FollowUps("Keep going", ["Where should I stay in Ella?"])`;
     expect(validatePlanningProgram(`root = PlanningCanvas("Trip", [hero])\nhero = TripHero("trip_1")`, baseSnapshot)).toEqual({ ok: true });
   });
 
+  it("accepts PlaceMap with two to twelve places and enforces a map when the question requires one", () => {
+    const map = `root = PlanningCanvas("Route", [map])\nmap = PlaceMap("Area", ["Ella, Sri Lanka", "Kandy, Sri Lanka"])`;
+    expect(validatePlanningProgram(map, baseSnapshot)).toEqual({ ok: true });
+    expect(validatePlanningProgram(`root = PlanningCanvas("Route", [map])\nmap = PlaceMap("Area", ["Ella, Sri Lanka"])`, baseSnapshot)).toMatchObject({ ok: false });
+    expect(validatePlanningProgram(`root = PlanningCanvas("Route", [map])\nmap = PlaceMap("Area", ["Ella, https://evil.example", "Kandy"])`, baseSnapshot)).toMatchObject({ ok: false });
+    const lead = `root = PlanningCanvas("Route", [lead])\nlead = Lead("Ella is a hill town.")`;
+    expect(validatePlanningProgram(lead, baseSnapshot)).toEqual({ ok: true });
+    expect(validatePlanningProgram(lead, baseSnapshot, { requireMap: true })).toMatchObject({ ok: false, errors: [expect.stringMatching(/PlaceMap/)] });
+    expect(validatePlanningProgram(map, baseSnapshot, { requireMap: true })).toEqual({ ok: true });
+  });
+
+  it("includes the saved itinerary on the map in the fallback when an itinerary exists", () => {
+    const fallback = buildFallbackProgram(packageSnapshot);
+    expect(fallback).toContain("TripMap(");
+    expect(validatePlanningProgram(fallback, packageSnapshot)).toEqual({ ok: true });
+  });
+
   it("accepts short generation refs that differ from database IDs", () => {
     const refSnapshot: PlanningSnapshot = {
       ...packageSnapshot,

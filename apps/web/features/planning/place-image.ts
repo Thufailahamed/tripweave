@@ -1,112 +1,102 @@
 "use client";
 import * as React from "react";
+import { apiPost } from "@/lib/api";
+import type { PlaceInfo } from "@tripweave/planning-contract";
 
 /**
- * Photographs and short descriptions for places named in a generated reply.
+ * Public reference data for places named in a planning reply (photograph, description, coordinates).
  *
- * The model supplies only a place name, which is looked up in the browser through Wikipedia's search
- * API (CORS-enabled). The returned image host is checked, the photograph is credited to its article,
- * and a miss returns null so the caller shows generated postcard artwork instead. Results are cached
- * per name for the life of the page; network failures are not cached so a later view can retry.
+ * The browser never calls Wikipedia. Names are batched into one request to the API, which resolves
+ * each place once for every organisation and returns only Wikimedia-hosted images. Results are cached
+ * for the page session. A failed or busy lookup is not cached, so a later view retries it.
  */
-export interface PlaceImage {
-  /** Wikimedia-hosted thumbnail, or null when the article has no free image. */
-  src: string | null;
-  /** Article title, used as the caption and alt text. */
-  title: string;
-  /** Link to the Wikipedia article that credits the photograph. */
-  pageUrl: string;
-  /** Opening paragraph of the article, plain text, or null. */
-  extract: string | null;
+export const PLACE_NAME_LIMIT = 80;
+const BATCH_DELAY_MS = 30;
+const BATCH_SIZE = 12;
+
+const cache = new Map<string, PlaceInfo | null>();
+const inflight = new Map<string, Promise<PlaceInfo | null>>();
+let queue: { name: string; key: string; resolve: (value: PlaceInfo | null) => void }[] = [];
+let timer: ReturnType<typeof setTimeout> | null = null;
+
+/** Trims, collapses whitespace and bounds the length so every name matches what the API accepts. */
+export function displayPlaceName(name: string | null | undefined): string {
+  return (name ?? "").replace(/\s+/g, " ").trim().slice(0, PLACE_NAME_LIMIT);
 }
 
-const SEARCH_ENDPOINT = "https://en.wikipedia.org/w/api.php";
-const MAX_NAME_LENGTH = 80;
-const cache = new Map<string, Promise<PlaceImage | null>>();
+export function placeKey(name: string | null | undefined): string {
+  return displayPlaceName(name).toLowerCase();
+}
 
-function isWikimediaImage(value: string): boolean {
+async function flush(): Promise<void> {
+  timer = null;
+  const batch = queue.splice(0, BATCH_SIZE);
+  if (queue.length > 0) timer = setTimeout(() => void flush(), BATCH_DELAY_MS);
+  let results: Record<string, PlaceInfo | null> = {};
   try {
-    const url = new URL(value);
-    return url.protocol === "https:" && (url.hostname === "upload.wikimedia.org" || url.hostname.endsWith(".wikimedia.org"));
+    const body = await apiPost<{ places: Record<string, PlaceInfo | null> }>("/planning/places", { names: batch.map((item) => item.name) });
+    results = body.places ?? {};
   } catch {
-    return false;
+    results = {};
+  }
+  for (const item of batch) {
+    const known = Object.prototype.hasOwnProperty.call(results, item.name);
+    if (known) cache.set(item.key, results[item.name] ?? null);
+    inflight.delete(item.key);
+    item.resolve(known ? (results[item.name] ?? null) : null);
   }
 }
 
-interface SearchPage {
-  title?: string;
-  fullurl?: string;
-  extract?: string;
-  thumbnail?: { source?: string };
-}
-
-async function lookup(name: string): Promise<PlaceImage | null> {
-  const params = new URLSearchParams({
-    action: "query",
-    generator: "search",
-    gsrsearch: name,
-    gsrlimit: "1",
-    gsrnamespace: "0",
-    prop: "pageimages|extracts|info",
-    piprop: "thumbnail",
-    pithumbsize: "960",
-    exintro: "1",
-    explaintext: "1",
-    exchars: "420",
-    inprop: "url",
-    format: "json",
-    formatversion: "2",
-    origin: "*",
+/** Resolves one place. Names are coalesced into batches of at most twelve per request. */
+export function lookupPlace(name: string): Promise<PlaceInfo | null> {
+  const display = displayPlaceName(name);
+  if (display.length < 2) return Promise.resolve(null);
+  const key = display.toLowerCase();
+  if (cache.has(key)) return Promise.resolve(cache.get(key) ?? null);
+  const existing = inflight.get(key);
+  if (existing) return existing;
+  const promise = new Promise<PlaceInfo | null>((resolve) => {
+    queue.push({ name: display, key, resolve });
   });
-  const response = await fetch(`${SEARCH_ENDPOINT}?${params.toString()}`, { headers: { accept: "application/json" } });
-  if (!response.ok) throw new Error(`Place lookup returned ${response.status}`);
-  const body = (await response.json()) as { query?: { pages?: SearchPage[] } };
-  const page = body.query?.pages?.[0];
-  if (!page?.title || !page.fullurl) return null;
-  const source = page.thumbnail?.source ?? null;
-  return {
-    src: source && isWikimediaImage(source) ? source : null,
-    title: page.title,
-    pageUrl: page.fullurl,
-    extract: page.extract?.trim() || null,
-  };
+  inflight.set(key, promise);
+  if (!timer) timer = setTimeout(() => void flush(), BATCH_DELAY_MS);
+  return promise;
 }
 
-/** Looks up a place once per page session. Callers should treat null as "no photograph available". */
-export function fetchPlaceImage(name: string): Promise<PlaceImage | null> {
-  const query = name.trim().slice(0, MAX_NAME_LENGTH);
-  if (query.length < 2) return Promise.resolve(null);
-  const key = query.toLowerCase();
-  let pending = cache.get(key);
-  if (!pending) {
-    pending = lookup(query).catch(() => {
-      cache.delete(key);
-      return null;
-    });
-    cache.set(key, pending);
-  }
-  return pending;
+export interface PlaceInfos {
+  /** True until every requested place has been looked up. */
+  loading: boolean;
+  /** Lookup results keyed by lower-case place name; `null` means no public article was found. */
+  byKey: Record<string, PlaceInfo | null>;
 }
 
-/**
- * `undefined` while the lookup is in flight, then the place or null. Pass null to skip the lookup,
- * for example when a curated or uploaded photograph already exists.
- */
-export function usePlaceImage(name: string | null | undefined): PlaceImage | null | undefined {
-  const key = (name ?? "").trim().slice(0, MAX_NAME_LENGTH);
-  const [settled, setSettled] = React.useState<{ key: string; value: PlaceImage | null } | null>(null);
+/** Looks up several places together. Pass the list the block was given; it may still be streaming. */
+export function usePlaceInfos(names: readonly string[]): PlaceInfos {
+  const signature = [...new Set(names.map(placeKey).filter((key) => key.length >= 2))].join("\u0001");
+  const [settled, setSettled] = React.useState<{ signature: string; byKey: Record<string, PlaceInfo | null> } | null>(null);
 
   React.useEffect(() => {
-    if (key.length < 2) return;
+    if (!signature) return;
     let active = true;
-    void fetchPlaceImage(key).then((value) => {
-      if (active) setSettled({ key, value });
+    const keys = signature.split("\u0001");
+    void Promise.all(keys.map(async (key) => [key, await lookupPlace(key)] as const)).then((entries) => {
+      if (active) setSettled({ signature, byKey: Object.fromEntries(entries) });
     });
     return () => {
       active = false;
     };
-  }, [key]);
+  }, [signature]);
 
-  if (key.length < 2) return null;
-  return settled?.key === key ? settled.value : undefined;
+  if (!signature) return { loading: false, byKey: {} };
+  if (settled?.signature !== signature) return { loading: true, byKey: {} };
+  return { loading: false, byKey: settled.byKey };
+}
+
+/** One place: `undefined` while looking up, then the result or `null` when no article was found. */
+export function usePlaceImage(name: string | null | undefined): PlaceInfo | null | undefined {
+  const key = placeKey(name);
+  const infos = usePlaceInfos(key ? [key] : []);
+  if (!key) return null;
+  if (infos.loading) return undefined;
+  return infos.byKey[key] ?? null;
 }

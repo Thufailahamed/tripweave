@@ -23,6 +23,7 @@ export const PLANNING_COMPONENT_NAMES = [
   "RecommendationExplanation",
   "QuickActions",
   "Lead",
+  "PlaceMap",
   "PlaceCard",
   "PlaceGallery",
   "DayPlan",
@@ -222,6 +223,17 @@ const PlaceGallery = define(
   PlaceGallerySchema,
 );
 
+const PlaceMapSchema = z.object({
+  title: optionalSafeText(80),
+  places: z.array(safeText(80)).min(2).max(12),
+});
+export { PlaceMapSchema };
+const PlaceMap = define(
+  "PlaceMap",
+  "Map of two or more named places with numbered markers, each located from its public coordinates, and a select-to-explore card. Pass place names with their regions, for example 'Ella, Sri Lanka'. Use it whenever the user asks where places are, how places relate, routes between them or distances.",
+  PlaceMapSchema,
+);
+
 const DayPlanSchema = z.object({
   day: safeText(40),
   title: safeText(100),
@@ -312,6 +324,7 @@ const PlanningCanvasSchema = z.object({
       Lead.ref,
       PlaceCard.ref,
       PlaceGallery.ref,
+      PlaceMap.ref,
       DayPlan.ref,
       TipList.ref,
       KeyFacts.ref,
@@ -348,6 +361,7 @@ export const planningComponents = [
   Lead,
   PlaceCard,
   PlaceGallery,
+  PlaceMap,
   DayPlan,
   TipList,
   KeyFacts,
@@ -382,11 +396,12 @@ export const planningComponentGroups = [
   },
   {
     name: "Travel guide",
-    components: ["Lead", "PlaceGallery", "PlaceCard", "DayPlan", "TipList", "KeyFacts", "Callout", "ComparisonTable", "FollowUps"],
+    components: ["Lead", "PlaceGallery", "PlaceCard", "PlaceMap", "DayPlan", "TipList", "KeyFacts", "Callout", "ComparisonTable", "FollowUps"],
     notes: [
       "Use these for general travel questions that do not need the saved trip: destinations, seasons, things to see, route and day ideas, packing, etiquette and planning advice.",
       "Open with Lead, then choose two or three visual blocks such as PlaceGallery, DayPlan or TipList. Finish with FollowUps.",
       "PlaceCard and PlaceGallery take a place name with its region only; the app supplies the photograph, so never pass a URL or image.",
+      "Use PlaceMap whenever the user asks where places are, how they relate, the route between them or distances. It takes two to twelve place names with regions and plots them on a map; the app locates them.",
       "General guidance is qualitative. Do not state prices, fares, opening hours, visa rules, ratings or availability as facts; use a caution Callout and name the official source instead.",
     ],
   },
@@ -426,6 +441,7 @@ export const PLANNING_PROP_SCHEMAS = {
   Lead: LeadSchema,
   PlaceCard: PlaceCardSchema,
   PlaceGallery: PlaceGallerySchema,
+  PlaceMap: PlaceMapSchema,
   DayPlan: DayPlanSchema,
   TipList: TipListSchema,
   KeyFacts: KeyFactsSchema,

@@ -158,6 +158,53 @@ describe("planning API", () => {
     expect(validatePlanningProgram(done.data.program, meta.data.snapshot as PlanningSnapshot)).toEqual({ ok: true });
   });
 
+  it("requires a map when the question is about where places are, and repairs a reply that omits it", async () => {
+    const replies: string[] = [];
+    const prompts: string[] = [];
+    const h = new Harness({ buildLlm: () => queuedClient(replies, prompts) });
+    const owner = await h.register("Planning Map Required", "tour_operator");
+    const trip = await createTrip(owner, { arrivalDate: "2026-12-10", departureDate: "2026-12-14" });
+    const withoutMap = `root = PlanningCanvas("Stays", [lead], "Ideas.")\nlead = Lead("Ella is a hill town.")`;
+    const withMap = `root = PlanningCanvas("Stays", [lead, map], "Ideas.")\nlead = Lead("Ella is a hill town.")\nmap = PlaceMap("Ella area", ["Ella, Sri Lanka", "Nuwara Eliya, Sri Lanka"])`;
+    replies.push(withoutMap, withMap);
+    const res = await owner.post(`/trips/${trip.id}/planning`, { message: "Where are the best hotels near Ella?" });
+    const events = parseSse(res.text);
+    expect(events.map((event) => event.event)).toEqual(["meta", "delta", "reset", "delta", "done"]);
+    expect(mustEvent(events, "done").data).toMatchObject({ usedFallback: false, attempts: 2, program: withMap });
+    expect(JSON.parse(prompts[1]!).repairNote.problems[0]).toMatch(/PlaceMap/);
+  });
+
+  it("does not force a map on questions without location intent", async () => {
+    const replies: string[] = [];
+    const prompts: string[] = [];
+    const h = new Harness({ buildLlm: () => queuedClient(replies, prompts) });
+    const owner = await h.register("Planning No Map", "tour_operator");
+    const trip = await createTrip(owner, { arrivalDate: "2026-12-10", departureDate: "2026-12-14" });
+    const packing = `root = PlanningCanvas("Packing", [list], "Ideas.")\nlist = TipList("Pack", ["Light layers"])`;
+    replies.push(packing);
+    const res = await owner.post(`/trips/${trip.id}/planning`, { message: "What should we pack?" });
+    const done = mustEvent(parseSse(res.text), "done");
+    expect(done.data).toMatchObject({ usedFallback: false, attempts: 1, program: packing });
+    expect(prompts).toHaveLength(1);
+  });
+
+  it("serves place lookups to signed-in users and rejects bad batches", async () => {
+    const wiki = { calls: 0 };
+    const h = new Harness({
+      buildLlm: () => queuedClient([], []),
+      fetch: (async () => {
+        wiki.calls += 1;
+        return new Response(JSON.stringify({ query: { pages: [] } }), { status: 200 });
+      }) as unknown as typeof globalThis.fetch,
+    });
+    const owner = await h.register("Planning Places Route", "tour_operator");
+    const res = await owner.post("/planning/places", { names: ["Atlantis, Sri Lanka"] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.places).toEqual({ "Atlantis, Sri Lanka": null });
+    expect((await owner.post("/planning/places", { names: [] })).status).toBe(422);
+    expect(wiki.calls).toBe(1);
+  });
+
   it("builds packages from real backend data and redacts margins for a read-only user", async () => {
     const h = new Harness();
     const owner = await h.register("Planning Packages", "tour_operator", "packages@example.com");

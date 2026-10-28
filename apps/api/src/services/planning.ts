@@ -280,7 +280,11 @@ function withoutNulls(props: Record<string, unknown>): Record<string, unknown> {
  * enums), every string is checked as plain text, and every reference must resolve to the current
  * snapshot. Tools and non-allowlisted components are rejected before any generated UI is rendered.
  */
-export function validatePlanningProgram(program: string, snapshot: PlanningSnapshot): { ok: true } | { ok: false; errors: string[] } {
+export function validatePlanningProgram(
+  program: string,
+  snapshot: PlanningSnapshot,
+  options: { requireMap?: boolean } = {},
+): { ok: true } | { ok: false; errors: string[] } {
   if (typeof program !== "string" || program.trim().length === 0) return { ok: false, errors: ["empty program"] };
   if (program.length > 40_000) return { ok: false, errors: ["program too large"] };
   let parser: ReturnType<typeof createParser>;
@@ -402,6 +406,9 @@ export function validatePlanningProgram(program: string, snapshot: PlanningSnaps
         break;
     }
   }
+  if (options.requireMap && !nodes.some((node) => node.typeName === "PlaceMap" || node.typeName === "TripMap")) {
+    errors.push("this question asks about places or routes, so the reply must include a PlaceMap block (or TripMap for the saved itinerary)");
+  }
   return errors.length > 0 ? { ok: false, errors } : { ok: true };
 }
 
@@ -420,7 +427,10 @@ export function buildFallbackProgram(snapshot: PlanningSnapshot, reason: "unavai
   };
   add(`TripRequirementSummary(${lang(snapshot.trip.ref)})`);
   if (snapshot.questions.length > 0) add(`ClarificationForm(${lang("These details are still missing.")})`);
-  if (snapshot.itinerary) add(`DestinationTimeline(${lang(snapshot.itinerary.ref)})`);
+  if (snapshot.itinerary) {
+    add(`DestinationTimeline(${lang(snapshot.itinerary.ref)})`);
+    add(`TripMap(${lang(snapshot.itinerary.ref)})`);
+  }
   if (snapshot.packages.length === 1) {
     add(`PackageSummary(${lang(snapshot.packages[0]!.ref)})`);
   } else if (snapshot.packages.length > 1) {

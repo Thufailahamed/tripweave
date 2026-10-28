@@ -55,7 +55,11 @@ Replies are no longer limited to the saved trip. The model classifies each reque
 
 General guidance is qualitative. The validator rejects prices, currency amounts and URLs in every string the model writes. General cost, visa, health or safety questions are answered with a caution `Callout` that names the official source.
 
-Destination photographs and short descriptions for place names come from Wikipedia's search API, looked up in the browser (`apps/web/features/planning/place-image.ts`). The model supplies a place name only. Images are accepted only from Wikimedia hosts, every photo credits its article, and a miss shows the generated postcard artwork.
+Place photographs, short descriptions and coordinates come from Wikipedia's search API, resolved by the API (`apps/api/src/services/places.ts`) through `POST /planning/places`. The browser batches place names into one request, so it never calls Wikipedia directly. The model supplies a place name only. Results are cached for all organisations in the `place_media` table (30 days for articles, one day for misses). Only Wikimedia-hosted HTTPS images are returned, every photo credits its article, a place with no free image shows generated postcard artwork, and rate-limited lookups are retried rather than cached.
+
+## Maps
+
+Location questions always get a map. `requestNeedsMap` detects questions about where places are, routes and distances. For those, the server requires a `PlaceMap` (general places, plotted from their public coordinates in the order given) or a `TripMap` (the saved itinerary). A reply without one is repaired once, like any other validation failure. Places without coordinates are listed rather than guessed.
 
 ## Generation, repair and variety
 
@@ -81,7 +85,7 @@ The finite library is defined in `packages/planning-contract/src/library.ts`:
 - `RouteSummary`
 - `RecommendationExplanation`
 - `QuickActions`
-- `Lead`, `PlaceCard`, `PlaceGallery`, `DayPlan`, `TipList`, `KeyFacts`, `Callout`, `ComparisonTable`, `FollowUps` (travel guide: text and place names only)
+- `Lead`, `PlaceCard`, `PlaceGallery`, `PlaceMap`, `DayPlan`, `TipList`, `KeyFacts`, `Callout`, `ComparisonTable`, `FollowUps` (travel guide: text and place names only; `PlaceMap` takes two to twelve names)
 
 `BudgetMeter` normalises the optimiser's 0..1 sub-scores before rendering, and `TripHero` accepts the optional itinerary ref so the model can compose a photographic cover without inventing image URLs.
 
@@ -214,3 +218,12 @@ Compatibility notes:
 Do not add a generic `Text`, `HTML`, `Button`, `Image`, `Link`, `Query`, `Mutation` or arbitrary action component. Text belongs in `PlanningCanvas.title/subtitle`; navigation is a fixed host action; images come from an existing hotel offer's internal image id.
 
 Do not add an `actions:` array to either `createLibrary` call. The host-handled actions are deliberately not part of the model-facing library: the OpenUI renderer intercepts defined custom actions, while our components emit fixed raw action events to the host switch. The action names and payload schemas live in `packages/planning-contract/src/actions.ts` and are covered by the contract test.
+
+## Verification
+
+- `pnpm test` covers the validator (every block's schema and reference rules), the repair and map-requirement flow over HTTP, the place cache (shared across organisations, miss caching, rate-limit handling, image host and coordinate checks), and each travel component's interactions.
+- An end-to-end run uses the real API over HTTP with an in-memory database, a scripted model and Wikipedia fixtures that point at real Commons photographs:
+  1. `pnpm --filter @tripweave/api exec tsx test/e2e/serve.ts` (API on port 8787)
+  2. `API_BASE_URL=http://localhost:8787 pnpm --filter @tripweave/web dev` (web on port 3000)
+  3. `node scripts/planner-e2e.mjs <screenshot-dir>` drives Chromium through the trip page and checks every block, the photographs, the map markers and tiles, each interaction, the repair and fallback paths, the off-topic reply, dark mode and a 390px layout.
+- The scripted model proves the rendering and the protocol. It does not prove that Workers AI writes good programs; that still needs a check against the live model on staging.

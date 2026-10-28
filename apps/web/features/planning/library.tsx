@@ -13,6 +13,7 @@ import { TripRequirementSummary } from "./components/requirements";
 import { RouteSummary } from "./components/routes";
 import { TripMap } from "./components/map";
 import { DestinationTimeline } from "./components/timeline";
+import { PlaceMap } from "./components/place-map";
 import { Callout, ComparisonTable, DayPlan, FollowUps, KeyFacts, Lead, PlaceCard, PlaceGallery, TipList } from "./components/travel";
 
 type PlanningLibrary = ReturnType<typeof createLibrary>;
@@ -46,6 +47,7 @@ export function getPlanningLibrary(): PlanningLibrary {
       Lead,
       PlaceCard,
       PlaceGallery,
+      PlaceMap,
       DayPlan,
       TipList,
       KeyFacts,

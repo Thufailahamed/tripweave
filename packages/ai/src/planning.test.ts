@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PlanningSnapshot } from "@tripweave/planning-contract";
 import { ExternalLlmClient, WorkersAiClient, sseData } from "./clients";
 import type { LlmClient } from "./parse";
-import { PLANNING_TEMPERATURE, buildPlanningContext, buildPlanningPrompt, planningStarters, streamPlanningProgram } from "./planning";
+import { PLANNING_TEMPERATURE, buildPlanningContext, buildPlanningPrompt, planningStarters, requestNeedsMap, streamPlanningProgram } from "./planning";
 
 const snapshot: PlanningSnapshot = {
   generatedAt: "2026-10-28T10:00:00.000Z",
@@ -108,6 +108,21 @@ describe("general travel planning", () => {
   it("keeps general starters available when the saved trip has no itinerary or packages", () => {
     expect(planningStarters(snapshot).map((starter) => starter.label)).toEqual(expect.arrayContaining(["Things to see and do", "What should we pack?"]));
     expect(planningStarters(snapshot).length).toBeLessThanOrEqual(6);
+  });
+});
+
+describe("map requirement", () => {
+  it("recognises questions about where places are, routes and distances", () => {
+    for (const message of ["Where should we stay near Ella?", "Show me on a map", "How far is Kandy from Galle?", "Route from Kandy to Ella", "What is between Colombo and Galle?", "How do I get from Ella to Kandy?"]) {
+      expect(requestNeedsMap(message), message).toBe(true);
+    }
+    for (const message of ["What should we pack?", "Plan a relaxed day", "Suggest a tea estate experience"]) {
+      expect(requestNeedsMap(message), message).toBe(false);
+    }
+  });
+
+  it("offers a map starter for the planner's welcome screen", () => {
+    expect(planningStarters(snapshot).map((starter) => starter.label)).toContain("Map the places to see");
   });
 });
 

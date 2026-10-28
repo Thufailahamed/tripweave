@@ -75,8 +75,8 @@ export function DestinationPhoto({
   const [failed, setFailed] = React.useState(false);
   const source = destinationImage(destination);
   const remote = usePlaceImage(!imageId && !source ? destination : null);
-  const src = hotelImageUrl(imageId) ?? source?.src ?? remote?.src ?? null;
-  const label = alt ?? source?.alt ?? remote?.title ?? destination;
+  const src = hotelImageUrl(imageId) ?? source?.src ?? remote?.imageUrl ?? null;
+  const label = alt ?? source?.alt ?? remote?.articleTitle ?? destination;
 
   React.useEffect(() => {
     setFailed(false);
@@ -105,12 +105,12 @@ export function PhotoCreditLine({ destination, imageId }: { destination: string;
   const remote = usePlaceImage(!imageId && !source ? destination : null);
   if (imageId) return null;
   if (!source) {
-    if (!remote?.src) return null;
+    if (!remote?.imageUrl) return null;
     return (
       <span className="text-[10px] text-[var(--pl-muted)]">
         Photo:{" "}
-        <a href={remote.pageUrl} target="_blank" rel="noreferrer noopener" className="underline decoration-[var(--pl-line)] underline-offset-2 hover:text-[var(--pl-ink)]">
-          {remote.title} on Wikipedia
+        <a href={remote.articleUrl} target="_blank" rel="noreferrer noopener" className="underline decoration-[var(--pl-line)] underline-offset-2 hover:text-[var(--pl-ink)]">
+          {remote.articleTitle} on Wikipedia
         </a>
       </span>
     );

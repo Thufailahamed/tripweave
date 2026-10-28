@@ -28,6 +28,7 @@ describe("planning contract", () => {
       "RecommendationExplanation",
       "QuickActions",
       "Lead",
+      "PlaceMap",
       "PlaceCard",
       "PlaceGallery",
       "DayPlan",

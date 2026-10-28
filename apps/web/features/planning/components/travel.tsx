@@ -23,7 +23,7 @@ import { DestinationPhoto } from "./destination-photo";
  * names only. Every interaction either changes local presentation state (ticking an activity) or sends
  * the reader's next question back to the assistant through the built-in continue-conversation action.
  */
-function useAskAssistant() {
+export function useAskAssistant() {
   const trigger = useTriggerAction();
   return React.useCallback((prompt: string) => void trigger(prompt, undefined, { params: {} }), [trigger]);
 }
@@ -62,8 +62,8 @@ export const PlaceCard = defineComponent({
             <button type="button" className="pl-btn pl-btn-solid" onClick={() => ask(`Tell me about ${props.name}: what to see, how long to stay and how to get there.`)}>
               Ask about this place
             </button>
-            {place?.pageUrl ? (
-              <a href={place.pageUrl} target="_blank" rel="noreferrer noopener" className="text-[11px] text-[var(--pl-muted)] underline decoration-[var(--pl-line)] underline-offset-2 hover:text-[var(--pl-ink)]">
+            {place?.articleUrl ? (
+              <a href={place.articleUrl} target="_blank" rel="noreferrer noopener" className="text-[11px] text-[var(--pl-muted)] underline decoration-[var(--pl-line)] underline-offset-2 hover:text-[var(--pl-ink)]">
                 Read on Wikipedia
               </a>
             ) : null}

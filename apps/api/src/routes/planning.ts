@@ -1,13 +1,14 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { planningStarters, streamPlanningProgram, PlanningGenerationError, PlanningUnavailableError } from "@tripweave/ai";
-import { clarificationSubmissionSchema, PLANNING_COMPONENT_NAMES } from "@tripweave/planning-contract";
+import { planningStarters, requestNeedsMap, streamPlanningProgram, PlanningGenerationError, PlanningUnavailableError } from "@tripweave/ai";
+import { clarificationSubmissionSchema, PLANNING_COMPONENT_NAMES, placeLookupRequestSchema } from "@tripweave/planning-contract";
 import { ops } from "@tripweave/database";
 import type { Env, Vars } from "../env";
 import { ok, parseBody, requireParam, type AppContext } from "../lib/http";
 import { audit, rateLimit, requirePermission, requireTenant } from "../middleware/auth";
 import { loadIntegrations } from "../services/settings";
+import { lookupPlaces } from "../services/places";
 import { applyClarificationAnswers, buildFallbackProgram, buildPlanningSnapshot, validatePlanningProgram } from "../services/planning";
 
 export const planningRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -118,6 +119,7 @@ planningRoutes.post("/trips/:id/planning", requirePermission("trips:read"), rate
 
       let repair: { previousReply: string; problems: string[] } | undefined;
       let outputChars = 0;
+      const requireMap = requestNeedsMap(body.message);
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
         attempts = attempt;
         if (attempt > 1 && !(await write("reset", { attempt, reason: "repair" }))) return;
@@ -126,7 +128,7 @@ planningRoutes.post("/trips/:id/planning", requirePermission("trips:read"), rate
           const result = await streamPlanningProgram(llm, snapshot, { message: body.message, history: body.history, repair }, (chunk) => void write("delta", { text: chunk }), controller.signal);
           text = result.text;
           outputChars += text.length;
-          const validation = validatePlanningProgram(text, snapshot);
+          const validation = validatePlanningProgram(text, snapshot, { requireMap });
           if (validation.ok) {
             await write("done", { program: text, engine: result.engine, model: result.model, usedFallback: false, attempts, warnings: result.warnings });
             await record(result.engine, result.model, outputChars, "ok");
@@ -179,6 +181,17 @@ planningRoutes.post("/trips/:id/planning", requirePermission("trips:read"), rate
       clearTimeout(timer);
     }
   });
+});
+
+/**
+ * Public place reference data (article, description, photograph, coordinates) for the planner's photo
+ * and map blocks. The browser sends batches of names; the API resolves each one once for all users.
+ */
+planningRoutes.post("/planning/places", requirePermission("trips:read"), rateLimit({ name: "place-lookup", limit: 600, windowSeconds: 3_600, by: "user" }), async (c) => {
+  const body = await parseBody(c, placeLookupRequestSchema);
+  const places = await lookupPlaces(c, body.names);
+  c.header("cache-control", "private, max-age=600");
+  return ok(c, { places });
 });
 
 planningRoutes.post("/trips/:id/planning/clarifications", requirePermission("trips:write"), rateLimit({ name: "planning-clarify", limit: 60, windowSeconds: 3_600, by: "user" }), async (c) => {
