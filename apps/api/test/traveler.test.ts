@@ -115,6 +115,23 @@ describe("traveller packing", () => {
     const empty = await c.ok<{ items: TravelerPackingItem[] }>("GET", `/traveler/trips/${tripId}/packing`);
     expect(empty.items).toEqual([]);
   });
+
+  it("generates an activity-aware list once and preserves checked items", async () => {
+    const h = new Harness();
+    const { c, tripId } = await travelerWithTrip(h);
+    const first = await c.ok<{ added: number; items: TravelerPackingItem[] }>("POST", `/traveler/trips/${tripId}/packing/generate`, {});
+    expect(first.added).toBeGreaterThan(10);
+    const labels = first.items.map((item) => item.label.toLowerCase());
+    expect(labels).toContain("walking shoes");
+    expect(labels).toContain("modest clothing");
+
+    const checked = first.items.find((item) => item.label === "Passport / ID")!;
+    await c.ok("PATCH", `/traveler/trips/${tripId}/packing/${checked.id}`, { isChecked: true });
+    const second = await c.ok<{ added: number; items: TravelerPackingItem[] }>("POST", `/traveler/trips/${tripId}/packing/generate`, {});
+    expect(second.added).toBe(0);
+    expect(second.items).toHaveLength(first.items.length);
+    expect(second.items.find((item) => item.id === checked.id)?.isChecked).toBe(true);
+  });
 });
 
 describe("traveller notes", () => {

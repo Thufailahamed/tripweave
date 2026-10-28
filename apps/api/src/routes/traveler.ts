@@ -17,6 +17,7 @@ import type { Env, Vars } from "../env";
 import { randomToken, sha256Hex } from "../lib/crypto";
 import { ok, parseBody, requireParam, type AppContext } from "../lib/http";
 import { audit, getTraveler, rateLimit, requireTraveler } from "../middleware/auth";
+import { suggestPackingItems } from "../services/traveler-packing";
 
 export const travelerRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
 travelerRoutes.use("*", requireTraveler);
@@ -152,6 +153,22 @@ travelerRoutes.delete("/trips/:id/packing/:itemId", writeLimit, async (c) => {
   if (!(await traveler.deletePackingItem(c.get("db"), a.organizationId, trip.id, itemId))) throw new AppError("not_found", "Packing item not found");
   await audit(c, "traveler.packing_deleted", "trip", trip.id, { itemId });
   return ok(c, { deleted: true });
+});
+
+travelerRoutes.post("/trips/:id/packing/generate", writeLimit, async (c) => {
+  const a = getTraveler(c);
+  const trip = await mustTrip(c, requireParam(c, "id"));
+  const db = c.get("db");
+  const itinerary = await trips.getLatestItinerary(db, a.organizationId, trip.id);
+  const suggestions = suggestPackingItems({
+    arrivalDate: trip.arrivalDate,
+    departureDate: trip.departureDate,
+    destinations: itinerary?.stops.map((stop) => stop.destination) ?? [],
+    activities: itinerary?.stops.flatMap((stop) => stop.activities) ?? [],
+  });
+  const added = await traveler.addPackingItemsIfMissing(db, a.organizationId, trip.id, suggestions);
+  await audit(c, "traveler.packing_generated", "trip", trip.id, { added });
+  return ok(c, { added, items: await traveler.listPackingItems(db, a.organizationId, trip.id) });
 });
 
 /* ---------- notes ---------- */
