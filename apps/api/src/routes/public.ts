@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { AppError, quoteAcceptSchema } from "@tripweave/shared";
-import { admin, inventory, ops, quotes, trips } from "@tripweave/database";
+import { AppError, quoteAcceptSchema, TRAVELER_BUDGET_CATEGORIES, type TravelerPublicTripView } from "@tripweave/shared";
+import { admin, inventory, ops, quotes, traveler, trips } from "@tripweave/database";
 import { renderProposalPdf } from "@tripweave/proposal-renderer";
 import type { Env, Vars } from "../env";
 import { sha256Hex } from "../lib/crypto";
@@ -33,6 +33,51 @@ publicRoutes.get("/platform", async (c) => {
     supportEmail: settings.supportEmail,
     announcement: announcement ? { id: announcement.id, title: announcement.title, body: announcement.body, tone: announcement.tone } : null,
   });
+});
+
+/**
+ * Read-only traveller trip. The view is an allow-list: no ids, coordinates, notes, packing,
+ * supplier data or costs. Expired, revoked and unknown tokens all return the same 404.
+ */
+publicRoutes.get("/trips/:token", rateLimit({ name: "public-trip", limit: 120, windowSeconds: 600 }), async (c) => {
+  const token = requireParam(c, "token");
+  if (token.length < 30) throw new AppError("not_found", "This link is invalid or has expired");
+  const db = c.get("db");
+  const share = await traveler.getActiveShareByTokenHash(db, await sha256Hex(token), c.get("deps").now().toISOString());
+  if (!share) throw new AppError("not_found", "This link is invalid or has expired");
+  const trip = await trips.getTrip(db, share.organizationId, share.tripRequestId);
+  if (!trip) throw new AppError("not_found", "This link is invalid or has expired");
+  const itinerary = await trips.getLatestItinerary(db, share.organizationId, trip.id);
+
+  let budget: TravelerPublicTripView["budget"] = null;
+  if (share.includeBudget) {
+    const items = await traveler.listBudgetItems(db, share.organizationId, trip.id);
+    const primary = items.filter((item) => item.currency === trip.budgetCurrency);
+    const byCategory = new Map<string, number>();
+    for (const item of primary) byCategory.set(item.category, (byCategory.get(item.category) ?? 0) + item.amountMinor);
+    budget = {
+      currency: trip.budgetCurrency,
+      totalMinor: primary.reduce((sum, item) => sum + item.amountMinor, 0),
+      categories: TRAVELER_BUDGET_CATEGORIES.filter((category) => (byCategory.get(category) ?? 0) > 0).map((category) => ({ category, totalMinor: byCategory.get(category) ?? 0 })),
+    };
+  }
+
+  const view: TravelerPublicTripView = {
+    generatedAt: c.get("deps").now().toISOString(),
+    trip: { title: trip.title, description: trip.description, arrivalDate: trip.arrivalDate, departureDate: trip.departureDate, party: trip.party },
+    itinerary: itinerary
+      ? {
+          title: itinerary.title,
+          summary: itinerary.summary,
+          status: itinerary.status,
+          stops: itinerary.stops.map((stop) => ({ destination: stop.destination, arrivalDate: stop.arrivalDate, departureDate: stop.departureDate, nights: stop.nights, activities: stop.activities })),
+        }
+      : null,
+    budget,
+  };
+  await traveler.recordShareView(db, share.id);
+  await ops.writeAudit(db, { organizationId: share.organizationId, actorUserId: null, action: "trip.shared_viewed", resourceType: "trip", resourceId: trip.id, metadata: { shareId: share.id }, requestId: c.get("requestId") });
+  return ok(c, view);
 });
 
 async function resolveShare(c: AppContext) {

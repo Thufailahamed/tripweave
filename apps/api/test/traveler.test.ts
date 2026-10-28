@@ -174,3 +174,82 @@ describe("traveller share links", () => {
     expect(revoked.shares).toEqual([]);
   });
 });
+
+describe("public trip sharing", () => {
+  it("serves a read-only trip with an optional budget summary and no private data", async () => {
+    const h = new Harness();
+    const { c, tripId } = await travelerWithTrip(h);
+    await c.ok("POST", `/traveler/trips/${tripId}/budget`, { label: "Train", category: "transport", amountMinor: 4_500 });
+    await c.ok("POST", `/traveler/trips/${tripId}/budget`, { label: "Guesthouse", category: "stay", amountMinor: 12_000 });
+    const created = await c.ok<{ url: string }>("POST", `/traveler/trips/${tripId}/shares`, { expiresInDays: 30, includeBudget: true });
+    const token = created.url.split("/t/")[1]!;
+
+    const anon = h.client();
+    const view = await anon.ok<{
+      trip: { title: string; party: { adults: number } };
+      itinerary: { stops: { destination: string; activities: string[] }[] } | null;
+      budget: { currency: string; totalMinor: number; categories: { category: string; totalMinor: number }[] } | null;
+    }>("GET", `/public/trips/${token}`);
+    expect(view.trip.title).toBe("Hill country in December");
+    expect(view.trip.party.adults).toBe(2);
+    expect(view.itinerary?.stops[0]?.destination).toBe("Kandy");
+    expect(view.itinerary?.stops[0]?.activities).toContain("Temple of the Tooth");
+    expect(view.budget?.totalMinor).toBe(16_500);
+    expect(view.budget?.categories).toContainEqual({ category: "stay", totalMinor: 12_000 });
+
+    const serialised = JSON.stringify(view).toLowerCase();
+    for (const forbidden of ["organizationid", "supplier", "margin", "costminor", "packing", "\"notes\"", "tokenhash"]) {
+      expect(serialised).not.toContain(forbidden);
+    }
+  });
+
+  it("honours the budget opt-out, revocation and expiry", async () => {
+    const h = new Harness();
+    const { c, tripId } = await travelerWithTrip(h);
+    const hiddenBudget = await c.ok<{ url: string }>("POST", `/traveler/trips/${tripId}/shares`, { expiresInDays: 1, includeBudget: false });
+    const anon = h.client();
+    const view = await anon.ok<{ budget: unknown }>("GET", `/public/trips/${hiddenBudget.url.split("/t/")[1]!}`);
+    expect(view.budget).toBeNull();
+
+    const active = await c.ok<{ shares: TravelerShare[] }>("GET", `/traveler/trips/${tripId}/shares`);
+    await c.ok("DELETE", `/traveler/trips/${tripId}/shares/${active.shares[0]!.id}`);
+    expect((await anon.get(`/public/trips/${hiddenBudget.url.split("/t/")[1]!}`)).status).toBe(404);
+
+    const expiring = await c.ok<{ url: string }>("POST", `/traveler/trips/${tripId}/shares`, { expiresInDays: 1, includeBudget: false });
+    h.now = new Date("2026-10-29T10:00:00Z");
+    expect((await anon.get(`/public/trips/${expiring.url.split("/t/")[1]!}`)).status).toBe(404);
+  });
+
+  it("returns the same not-found response for unknown tokens", async () => {
+    const h = new Harness();
+    const anon = h.client();
+    const missing = await anon.get(`/public/trips/${"x".repeat(40)}`);
+    expect(missing.status).toBe(404);
+    expect(missing.body.error.message).toBe("This link is invalid or has expired");
+  });
+
+  it("serves each trip's own share without mixing data", async () => {
+    const h = new Harness();
+    const { c, tripId } = await travelerWithTrip(h);
+    const secondTrip = await c.ok<{ id: string }>("POST", "/trips", {
+      title: "Coast and calm",
+      arrivalDate: "2027-01-05",
+      departureDate: "2027-01-09",
+      party: { adults: 2, children: 0, childAges: [], rooms: [{ adults: 2, children: 0 }] },
+      budgetCurrency: "USD",
+    });
+    await c.ok("PUT", `/trips/${secondTrip.id}/itinerary`, {
+      title: "South coast",
+      stops: [{ destination: "Galle", latitude: 6.0535, longitude: 80.221, arrivalDate: "2027-01-05", departureDate: "2027-01-09", activities: ["Fort walk"] }],
+    });
+    const first = await c.ok<{ url: string }>("POST", `/traveler/trips/${tripId}/shares`, { expiresInDays: 30, includeBudget: false });
+    const second = await c.ok<{ url: string }>("POST", `/traveler/trips/${secondTrip.id}/shares`, { expiresInDays: 30, includeBudget: false });
+    const anon = h.client();
+    const firstView = await anon.ok<{ trip: { title: string }; itinerary: { stops: { destination: string }[] } | null }>("GET", `/public/trips/${first.url.split("/t/")[1]!}`);
+    const secondView = await anon.ok<{ trip: { title: string }; itinerary: { stops: { destination: string }[] } | null }>("GET", `/public/trips/${second.url.split("/t/")[1]!}`);
+    expect(firstView.trip.title).toBe("Hill country in December");
+    expect(firstView.itinerary?.stops[0]?.destination).toBe("Kandy");
+    expect(secondView.trip.title).toBe("Coast and calm");
+    expect(secondView.itinerary?.stops[0]?.destination).toBe("Galle");
+  });
+});
