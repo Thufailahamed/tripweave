@@ -84,7 +84,17 @@ export function presentPackage(rec: trips.PackageRecord, rights: ViewerRights, p
  * supplier cost figures (package totals, per-hotel costs, nightly rates, taxes, supplier identity).
  */
 export function redactOfferCosts<T extends NormalisedOffer>(o: T): T {
-  return { ...o, totalAmountMinor: undefined, nightlyRates: undefined, taxAmountMinor: undefined, feeAmountMinor: undefined, supplierName: undefined, providerMetadata: undefined } as unknown as T;
+  return { ...o, totalAmountMinor: undefined, nightlyRates: undefined, taxAmountMinor: undefined, feeAmountMinor: undefined, supplierName: undefined, providerMetadata: publicOfferMetadata(o.providerMetadata) } as unknown as T;
+}
+
+/** Listing facts with no cost or supplier in them (photos, public rating, description), kept for every viewer. */
+const PUBLIC_METADATA_KEYS = ["images", "googleRating", "reviews", "description", "checkInTime", "checkOutTime", "propertyToken"] as const;
+
+function publicOfferMetadata(meta: NormalisedOffer["providerMetadata"]): Record<string, unknown> | undefined {
+  if (!meta) return undefined;
+  const out: Record<string, unknown> = {};
+  for (const key of PUBLIC_METADATA_KEYS) if (meta[key] !== undefined) out[key] = meta[key];
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** Removes cost-bearing sentences/figures from deterministic explanation lines. */

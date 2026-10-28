@@ -73,7 +73,7 @@ describe("PackageStoryPanel", () => {
     renderPanel();
     expect(await screen.findByText(money(PKG_1.pricing!.sellingPriceMinor, "USD"))).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "The packages, explained" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show in packages" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show in list" })).toBeInTheDocument();
   });
 
   it("explains a fallback presentation with the server's warning", async () => {
@@ -112,7 +112,7 @@ describe("PackageStoryPanel", () => {
     expect(await screen.findByText(/connection closed before the package story finished/)).toBeInTheDocument();
   });
 
-  it("opens a package in the standard list when its Show in packages button is pressed", async () => {
+  it("opens a package in the standard list when its Show in list button is pressed", async () => {
     const user = userEvent.setup();
     vi.stubGlobal(
       "fetch",
@@ -124,7 +124,7 @@ describe("PackageStoryPanel", () => {
       }),
     );
     const { onFocusPackage } = renderPanel();
-    await user.click(await screen.findByRole("button", { name: "Show in packages" }));
+    await user.click(await screen.findByRole("button", { name: "Show in list" }));
     expect(onFocusPackage).toHaveBeenCalledWith("pkg_1-id");
   });
 

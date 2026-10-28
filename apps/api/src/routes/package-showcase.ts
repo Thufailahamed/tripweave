@@ -3,6 +3,7 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { PlanningUnavailableError, streamPackageShowcaseProgram } from "@tripweave/ai";
 import { PACKAGE_SHOWCASE_COMPONENT_NAMES } from "@tripweave/planning-contract";
+import { fetchGoogleHotelPhotos, mapWithConcurrency, type GoogleHotelPhoto } from "@tripweave/provider-contracts";
 import { ops } from "@tripweave/database";
 import type { Env, Vars } from "../env";
 import { ok, parseBody, requireParam } from "../lib/http";
@@ -40,6 +41,48 @@ packageShowcaseRoutes.get("/trips/:id/packages/presentation", requirePermission(
   const snapshot = await buildPackageShowcaseSnapshot(c, id, jobId);
   c.header("cache-control", "no-store");
   return ok(c, { snapshot, allowlist: PACKAGE_SHOWCASE_COMPONENT_NAMES });
+});
+
+const PHOTO_TTL_SECONDS = 30 * 24 * 3_600;
+const NO_PHOTO_TTL_SECONDS = 24 * 3_600;
+const MAX_PHOTO_LOOKUPS = 24;
+
+/**
+ * Hotel photographs for the Google Hotels stays in one run. Search results now carry photos on the offer;
+ * this fills them in for offers stored before that. The server picks the property tokens from the run
+ * itself, so a caller cannot spend lookups on arbitrary hotels, and each token is cached for 30 days.
+ */
+packageShowcaseRoutes.get("/trips/:id/packages/photos", requirePermission("trips:read"), rateLimit({ name: "package-photos", limit: 60, windowSeconds: 3_600, by: "user" }), async (c) => {
+  const id = requireParam(c, "id");
+  const snapshot = await buildPackageShowcaseSnapshot(c, id, c.req.query("jobId") || null);
+  const wanted = new Map<string, { checkIn: string; checkOut: string; currency: string }>();
+  for (const entry of snapshot.offers) {
+    const meta = entry.offer.providerMetadata ?? {};
+    const token = typeof meta.propertyToken === "string" ? meta.propertyToken : null;
+    if (entry.offer.providerKey !== "google_hotels" || !token || (Array.isArray(meta.images) && meta.images.length > 0)) continue;
+    if (!wanted.has(token)) wanted.set(token, { checkIn: entry.offer.stayStart, checkOut: entry.offer.stayEnd, currency: entry.offer.currency });
+  }
+  const photos: Record<string, GoogleHotelPhoto[]> = {};
+  const kv = c.env.CACHE;
+  const apiKey = c.env.SERPAPI_API_KEY;
+  await mapWithConcurrency([...wanted.entries()].slice(0, MAX_PHOTO_LOOKUPS), 4, async ([token, stay]) => {
+    const key = `hotel-photos:${token}`;
+    const cached = kv ? await kv.get<GoogleHotelPhoto[]>(key, "json").catch(() => null) : null;
+    if (cached) {
+      photos[token] = cached;
+      return;
+    }
+    if (!apiKey) return;
+    try {
+      const found = await fetchGoogleHotelPhotos({ apiKey, baseUrl: c.env.SERPAPI_BASE_URL, token, checkIn: stay.checkIn, checkOut: stay.checkOut, currency: stay.currency });
+      photos[token] = found;
+      await kv?.put(key, JSON.stringify(found), { expirationTtl: found.length ? PHOTO_TTL_SECONDS : NO_PHOTO_TTL_SECONDS }).catch(() => undefined);
+    } catch {
+      // A failed lookup leaves the stay without photos; the card shows the destination instead.
+    }
+  });
+  c.header("cache-control", "private, max-age=300");
+  return ok(c, { photos });
 });
 
 /**

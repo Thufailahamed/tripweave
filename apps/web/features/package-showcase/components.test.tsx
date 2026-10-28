@@ -83,7 +83,7 @@ describe("package showcase components", () => {
   it("disables quotation creation for an external rate that has not been checked, and explains why", () => {
     renderProgram(`root = PackageShowcase("Cards", [card], "Status.")\ncard = PackageCard("pkg_2")`);
     expect(screen.getByRole("button", { name: "Create quotation" })).toBeDisabled();
-    expect(screen.getByText(/Live rates must be checked before a quotation can be created/)).toBeInTheDocument();
+    expect(screen.getByText(/Check live prices before creating a quotation/)).toBeInTheDocument();
   });
 
   it("sends the fixed validate action with the package ref when a live check is requested", async () => {

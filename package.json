@@ -8,6 +8,7 @@
     "test": "vitest run",
     "lint": "pnpm -r --parallel lint",
     "dev:api": "pnpm --filter @tripweave/api dev",
+    "kill:api": "node scripts/free-port.mjs 8787",
     "dev:web": "pnpm --filter @tripweave/web dev",
     "db:migrate:local": "pnpm --filter @tripweave/api db:migrate:local",
     "db:seed:local": "pnpm --filter @tripweave/api db:seed:local",

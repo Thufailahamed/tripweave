@@ -64,6 +64,8 @@ export interface PlanningPackageSelection {
   costMinor?: number;
   offer: NormalisedOffer;
   coverImageId?: string | null;
+  /** Dated links to see or book the stay; sent only to viewers who may see supplier costs. */
+  bookingLinks?: { kind: "seller" | "google" | "website"; label: string; url: string }[];
 }
 
 export interface PlanningPricing {
@@ -135,6 +137,8 @@ export interface PlanningHotelOffer {
   destination: string;
   offer: NormalisedOffer;
   coverImageId?: string | null;
+  /** Dated links to see or book the stay; sent only to viewers who may see supplier costs. */
+  bookingLinks?: { kind: "seller" | "google" | "website"; label: string; url: string }[];
 }
 
 export interface PlanningQuoteSummary {

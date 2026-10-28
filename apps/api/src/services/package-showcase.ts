@@ -52,7 +52,7 @@ export async function buildPackageShowcaseSnapshot(ctx: AppContext, tripId: stri
   };
   const allowedActions: PackageShowcaseAction[] = [
     "open_itinerary",
-    ...(permissions.canValidatePrices ? (["validate_package"] as const) : []),
+    ...(permissions.canValidatePrices ? (["validate_package", "replace_hotel", "reprice_package"] as const) : []),
     ...(permissions.canCreateQuotes ? (["create_quote"] as const) : []),
     ...(permissions.canRunOptimisation ? (["open_optimise"] as const) : []),
   ];

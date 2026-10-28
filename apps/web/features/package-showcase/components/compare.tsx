@@ -4,9 +4,10 @@ import { defineComponent } from "@openuidev/react-lang";
 import { PACKAGE_PROP_SCHEMAS, packageShowcaseDescriptions, type PlanningPackageView } from "@tripweave/planning-contract";
 import { Badge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { cn, mealLabel, money, nightsLabel } from "@/lib/utils";
+import { cn, mealLabel, nightsLabel } from "@/lib/utils";
 import { budgetPosition, lowestPricedId, nightsOf, perNightMinor, perTravellerMinor, resolveShowcasePackage, sellingPriceOf, sortPackages, travellerCount, type CompareSort } from "../helpers";
 import { usePackageShowcase } from "../context";
+import { useMoney } from "../currency";
 import { LiveBadge } from "./live";
 import { MissingEntity, ScoreBar, budgetText, objectiveLabel, shortCancellation, useHostAction } from "./shared";
 
@@ -37,6 +38,7 @@ export const PackageCompare = defineComponent({
   props: PACKAGE_PROP_SCHEMAS.PackageCompare,
   component: function PackageCompareView({ props }) {
     const { snapshot } = usePackageShowcase();
+    const fmt = useMoney();
     const act = useHostAction();
     const [basis, setBasis] = React.useState<Basis>("total");
     const [sort, setSort] = React.useState<CompareSort>("recommended");
@@ -110,7 +112,7 @@ export const PackageCompare = defineComponent({
                   const value = amount(pkg);
                   return (
                     <td key={pkg.id} className="px-4 py-3">
-                      <span className="tw-num font-display text-lg font-semibold">{value === null ? "Unavailable" : money(value, pkg.pricing?.currency ?? pkg.package.currency)}</span>
+                      <span className="tw-num font-display text-lg font-semibold">{value === null ? "Unavailable" : fmt(value, pkg.pricing?.currency ?? pkg.package.currency)}</span>
                       {pkg.id === cheapest ? (
                         <span className="ml-2 align-middle">
                           <Badge tone="success">Lowest price</Badge>
@@ -129,7 +131,7 @@ export const PackageCompare = defineComponent({
                   const difference = position.difference === null ? null : basis === "traveller" ? Math.round(position.difference / travellers) : position.difference;
                   return (
                     <td key={pkg.id} className={cn("px-4 py-3 font-medium", difference === null ? "text-muted-foreground" : difference >= 0 ? "text-success" : "text-destructive")}>
-                      {budgetText(difference, pkg.package.currency, basis === "traveller")}
+                      {budgetText(difference, pkg.package.currency, basis === "traveller", fmt)}
                     </td>
                   );
                 })}

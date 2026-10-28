@@ -6,6 +6,7 @@ import { Alert } from "@/components/ui/card";
 import { cn, formatDate, mealLabel, money, nightsLabel, percentFromBp } from "@/lib/utils";
 import { budgetPosition, nightsOf, perNightMinor, perTravellerMinor, resolveShowcasePackage, sellingPriceOf, travellerCount } from "../helpers";
 import { usePackageShowcase } from "../context";
+import { useMoney } from "../currency";
 import { MissingEntity, Meter, budgetText } from "./shared";
 
 function Row({ label, value, strong = false, muted = false }: { label: string; value: React.ReactNode; strong?: boolean; muted?: boolean }) {
@@ -23,6 +24,7 @@ export const PriceBreakdown = defineComponent({
   props: PACKAGE_PROP_SCHEMAS.PriceBreakdown,
   component: function PriceBreakdownView({ props }) {
     const { snapshot } = usePackageShowcase();
+    const fmt = useMoney();
     const pkg = resolveShowcasePackage(snapshot, props.packageId);
     if (!pkg) return <MissingEntity what="package" />;
     const pricing = pkg.pricing;
@@ -38,13 +40,13 @@ export const PriceBreakdown = defineComponent({
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">What the price includes</p>
           <dl className="mt-2">
-            <Row label="Selling price" value={money(selling, currency)} />
-            <Row label="Tax" value={money(pricing.sellingTaxMinor, currency)} />
-            <Row label="Total payable" value={money(pricing.totalPayableMinor, currency)} strong />
+            <Row label="Selling price" value={fmt(selling, currency)} />
+            <Row label="Tax" value={fmt(pricing.sellingTaxMinor, currency)} />
+            <Row label="Total payable" value={fmt(pricing.totalPayableMinor, currency)} strong />
           </dl>
           <dl className="mt-4">
-            <Row label={`Per night (${nightsLabel(nights)})`} value={money(perNightMinor(selling, nights), currency)} muted />
-            <Row label={`Per traveller (${travellers})`} value={money(perTravellerMinor(selling, travellers), currency)} muted />
+            <Row label={`Per night (${nightsLabel(nights)})`} value={fmt(perNightMinor(selling, nights), currency)} muted />
+            <Row label={`Per traveller (${travellers})`} value={fmt(perTravellerMinor(selling, travellers), currency)} muted />
           </dl>
           {pricing.approval?.required ? <Alert tone="warning" title="Approval needed">This package needs approval before it can be quoted.</Alert> : null}
           {pricing.warnings.length > 0 ? (
@@ -88,6 +90,7 @@ export const BudgetFit = defineComponent({
   props: PACKAGE_PROP_SCHEMAS.BudgetFit,
   component: function BudgetFitView({ props }) {
     const { snapshot } = usePackageShowcase();
+    const fmt = useMoney();
     const [basis, setBasis] = React.useState<"total" | "traveller">("total");
     const pkg = resolveShowcasePackage(snapshot, props.packageId);
     if (!pkg) return <MissingEntity what="package" />;
@@ -130,12 +133,12 @@ export const BudgetFit = defineComponent({
         ) : (
           <>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="tw-num font-display text-2xl font-semibold">{money(shownPrice, currency)}</p>
-              <p className="tw-num text-sm text-muted-foreground">of {money(shownBudget, trip.budgetCurrency)}</p>
+              <p className="tw-num font-display text-2xl font-semibold">{fmt(shownPrice, currency)}</p>
+              <p className="tw-num text-sm text-muted-foreground">of {fmt(shownBudget, trip.budgetCurrency)}</p>
             </div>
             {position.meterFraction !== null ? <Meter label="Selling price against the budget" fraction={position.meterFraction} /> : null}
             <p className={cn("text-sm font-semibold", shownDifference === null ? "text-muted-foreground" : shownDifference >= 0 ? "text-success" : "text-destructive")}>
-              {shownDifference === null ? "The server did not compare this package with the budget." : budgetText(shownDifference, currency, perTraveller)}
+              {shownDifference === null ? "The server did not compare this package with the budget." : budgetText(shownDifference, currency, perTraveller, fmt)}
             </p>
             <p className="text-xs text-muted-foreground">{scopeNote}</p>
           </>

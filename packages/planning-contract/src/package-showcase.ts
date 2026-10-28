@@ -5,7 +5,7 @@ import type { PlanningHotelOffer, PlanningPackageView } from "./snapshot";
  * Host-handled interactions for the generated package presentation. Each one maps to a fixed
  * operation in the packages page. There is no generic URL, fetch or mutation action.
  */
-export const PACKAGE_SHOWCASE_ACTIONS = ["focus_package", "validate_package", "create_quote", "open_itinerary", "open_optimise"] as const;
+export const PACKAGE_SHOWCASE_ACTIONS = ["focus_package", "validate_package", "create_quote", "open_itinerary", "open_optimise", "replace_hotel", "reprice_package"] as const;
 
 export type PackageShowcaseAction = (typeof PACKAGE_SHOWCASE_ACTIONS)[number];
 

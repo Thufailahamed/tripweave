@@ -154,7 +154,7 @@ export type SpecialRequirements = z.infer<typeof specialRequirementsSchema>;
 
 const tripRequestBase = z.object({
     customerId: idSchema.nullable().optional(),
-    title: z.string().trim().min(2).max(200),
+    title: z.string().trim().min(2, "Give the trip a title of at least 2 characters").max(200),
     description: z.string().max(10_000).default(""),
     arrivalDate: isoDateSchema.nullable().optional(),
     departureDate: isoDateSchema.nullable().optional(),

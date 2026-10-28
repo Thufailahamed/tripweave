@@ -7,6 +7,8 @@ export interface GoogleLiveRate {
   breakfast: "included" | "not_included" | "unknown";
   freeCancellation: boolean | null;
   inclusions: string[];
+  /** The seller's booking link for these dates and guests (a Google redirect), when given. */
+  link: string | null;
 }
 
 interface Money {
@@ -17,6 +19,7 @@ interface Money {
 
 interface PropertyPrice {
   source?: string;
+  link?: string;
   num_guests?: number;
   total_rate?: Money;
   rate_per_night?: Money;
@@ -27,6 +30,7 @@ interface PropertyPrice {
 
 interface PropertyRoom {
   name?: string;
+  link?: string;
   num_guests?: number;
   total_rate?: Money;
   rate_per_night?: Money;
@@ -46,6 +50,16 @@ interface PropertyRate {
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 const integer = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/** A booking link is only kept when it is an https URL. */
+export function httpsLink(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 4_000) return null;
+  try {
+    return new URL(value).protocol === "https:" ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The amount a Google money field gives for a stay. The after-tax-and-fee figure is the complete price, so
@@ -91,8 +105,9 @@ export function parseGooglePropertyRates(body: unknown, { rooms }: { rooms: numb
   const roomCount = Math.max(1, rooms);
   const out: GoogleLiveRate[] = [];
 
-  const add = (price: PropertyPrice, room: string | null, guests: number | null, money: { totalMinor: number; nightlyMinor: number | null }, inclusions: string[], cancellation: boolean | null) => {
+  const add = (price: PropertyPrice, room: string | null, guests: number | null, money: { totalMinor: number; nightlyMinor: number | null }, inclusions: string[], cancellation: boolean | null, link: string | null = null) => {
     out.push({
+      link: link ?? httpsLink(price.link),
       source: text(price.source) ?? "Google Hotels",
       room,
       guests,
@@ -128,7 +143,7 @@ export function parseGooglePropertyRates(body: unknown, { rooms }: { rooms: numb
           if (!money) continue;
           const inclusions = [...roomInclusions, ...stringList(rate.inclusions)];
           const cancellation = typeof rate.free_cancellation === "boolean" ? rate.free_cancellation : inclusions.some((v) => /free cancellation/i.test(v)) ? true : roomCancellation;
-          add(price, roomName, integer(rate.num_guests) ?? integer(room.num_guests) ?? integer(price.num_guests), money, inclusions, cancellation);
+          add(price, roomName, integer(rate.num_guests) ?? integer(room.num_guests) ?? integer(price.num_guests), money, inclusions, cancellation, httpsLink(room.link));
           found = true;
         }
         continue;
@@ -136,7 +151,7 @@ export function parseGooglePropertyRates(body: unknown, { rooms }: { rooms: numb
 
       const money = totalFrom(room.total_rate) ?? totalFrom(price.total_rate);
       if (!money) continue;
-      add(price, roomName, integer(room.num_guests) ?? integer(price.num_guests), money, roomInclusions, roomCancellation);
+      add(price, roomName, integer(room.num_guests) ?? integer(price.num_guests), money, roomInclusions, roomCancellation, httpsLink(room.link));
       found = true;
     }
 

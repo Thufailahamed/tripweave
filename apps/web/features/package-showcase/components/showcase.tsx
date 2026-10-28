@@ -3,6 +3,7 @@ import * as React from "react";
 import { defineComponent } from "@openuidev/react-lang";
 import { PACKAGE_PROP_SCHEMAS, packageShowcaseDescriptions } from "@tripweave/planning-contract";
 import { Alert } from "@/components/ui/card";
+import { usePackageShowcase } from "../context";
 
 export const PackageShowcase = defineComponent({
   name: "PackageShowcase",
@@ -10,6 +11,21 @@ export const PackageShowcase = defineComponent({
   props: PACKAGE_PROP_SCHEMAS.PackageShowcase,
   component: function PackageShowcaseView({ props, renderNode }) {
     const id = React.useId();
+    const { surface } = usePackageShowcase();
+    if (surface === "gallery") {
+      return (
+        <section aria-labelledby={id} className="flex min-w-0 flex-col gap-4">
+          <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 id={id} className="font-display text-2xl font-semibold tracking-[-0.03em]">
+              {props.title}
+            </h2>
+            {props.subtitle ? <p className="text-xs text-muted-foreground">{props.subtitle}</p> : null}
+          </header>
+          {/* Cards share a responsive grid; any other block (a comparison) spans the full row. */}
+          <div className="grid min-w-0 gap-5 lg:grid-cols-2 2xl:grid-cols-3 [&>*]:min-w-0 [&>*:not(article)]:col-span-full">{renderNode(props.blocks)}</div>
+        </section>
+      );
+    }
     return (
       <section aria-labelledby={id} className="flex min-w-0 flex-col gap-6">
         <header className="flex min-w-0 max-w-3xl flex-col gap-2">

@@ -75,8 +75,11 @@ export const PlaceMap = defineComponent({
       L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 18 }).addTo(map);
       mapRef.current = map;
       layerRef.current = L.layerGroup().addTo(map);
+      let disposed = false;
       // Measure once laid out; cancelled if the map is removed first (Strict Mode, streaming re-renders).
-      const frame = requestAnimationFrame(() => map.invalidateSize());
+      const frame = requestAnimationFrame(() => {
+        if (!disposed && mapRef.current === map) map.invalidateSize();
+      });
       // When the column changes width (window resize, sidebar, rotation), keep the whole route in view.
       // Older test DOMs lack ResizeObserver.
       let width = node.clientWidth;
@@ -84,6 +87,7 @@ export const PlaceMap = defineComponent({
         typeof ResizeObserver === "undefined"
           ? null
           : new ResizeObserver(() => {
+              if (disposed || mapRef.current !== map) return;
               if (node.clientWidth === width) return;
               width = node.clientWidth;
               map.invalidateSize();
@@ -92,6 +96,7 @@ export const PlaceMap = defineComponent({
             });
       observer?.observe(node);
       return () => {
+        disposed = true;
         cancelAnimationFrame(frame);
         observer?.disconnect();
         map.remove();

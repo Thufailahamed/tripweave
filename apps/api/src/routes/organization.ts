@@ -112,6 +112,49 @@ orgRoutes.put("/organization/fx", requirePermission("settings:pricing"), async (
   return ok(c, snapshot);
 });
 
+/** Currencies a reader may view prices in. Viewing only: quotations still use the pricing FX snapshot. */
+export const DISPLAY_CURRENCIES = ["USD", "EUR", "GBP", "LKR", "INR", "AUD", "CAD", "CHF", "JPY", "CNY", "SGD", "AED"] as const;
+const DISPLAY_FX_TTL_SECONDS = 6 * 3_600;
+
+/**
+ * Market rates for showing prices in another currency (1 USD = rate). Taken from open.er-api.com, which
+ * updates daily, and cached for six hours. When it is unreachable the organisation's pricing snapshot
+ * is used, so the switcher still works with the currencies that snapshot covers.
+ */
+orgRoutes.get("/organization/fx/display", async (c) => {
+  type DisplayFx = { base: "USD"; rates: Record<string, number>; asOf: string; source: string; live: boolean };
+  const kv = c.env.CACHE;
+  const cached = kv ? await kv.get<DisplayFx>("fx-display:USD", "json").catch(() => null) : null;
+  if (cached) return ok(c, cached);
+  try {
+    const res = await c.get("deps").fetch("https://open.er-api.com/v6/latest/USD", { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
+    const body = (await res.json()) as { result?: string; rates?: Record<string, unknown>; time_last_update_utc?: string };
+    if (res.ok && body.result === "success" && body.rates) {
+      const rates: Record<string, number> = {};
+      for (const code of DISPLAY_CURRENCIES) {
+        const rate = body.rates[code];
+        if (typeof rate === "number" && Number.isFinite(rate) && rate > 0) rates[code] = rate;
+      }
+      const asOf = body.time_last_update_utc ? new Date(body.time_last_update_utc).toISOString() : c.get("deps").now().toISOString();
+      const fresh: DisplayFx = { base: "USD", rates, asOf, source: "open.er-api.com", live: true };
+      await kv?.put("fx-display:USD", JSON.stringify(fresh), { expirationTtl: DISPLAY_FX_TTL_SECONDS }).catch(() => undefined);
+      return ok(c, fresh);
+    }
+  } catch {
+    // Fall through to the organisation's own rates.
+  }
+  const snapshot = await ops.latestFxSnapshot(c.get("db"), getTenant(c).organizationId);
+  const rates: Record<string, number> = { USD: 1 };
+  if (snapshot) {
+    const usd = snapshot.pivot === "USD" ? 1 : Number(snapshot.rates.USD);
+    for (const [code, value] of Object.entries({ ...snapshot.rates, [snapshot.pivot]: "1" })) {
+      const perPivot = Number(value);
+      if (usd > 0 && perPivot > 0) rates[code] = perPivot / usd;
+    }
+  }
+  return ok(c, { base: "USD", rates, asOf: snapshot?.asOf ?? c.get("deps").now().toISOString(), source: snapshot ? `your pricing rates (${snapshot.source})` : "none", live: false });
+});
+
 /* ---------- integrations (non-secret configuration + health) ---------- */
 
 orgRoutes.get("/organization/integrations", requirePermission("settings:integrations"), async (c) => {

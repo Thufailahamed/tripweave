@@ -4,9 +4,8 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, CalendarDays, Check, CheckCircle2, Circle, Hotel, Layers, Map, Route, Users, Wallet, Wand2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Circle, Layers, Map, Route, Wand2 } from "lucide-react";
 import { toast } from "sonner";
-import { MEAL_PLAN_LABELS, type MealPlan } from "@tripweave/shared";
 import { Alert, Badge, EmptyState, ErrorState, IconTile, LoadingBlock } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/overlay";
@@ -16,10 +15,10 @@ import { QuotesShelf, StatusTimeline } from "@/features/trips/trip-records";
 import { TripCover } from "@/features/trips/trip-cover";
 import { ApiError, apiPatch, errorMessage } from "@/lib/api";
 import { useCan } from "@/lib/session";
-import { dateRange, formatDateTime, money, nightsLabel, titleCase } from "@/lib/utils";
+import { formatDateTime, titleCase } from "@/lib/utils";
 import { tripKeys, useTrip } from "@/features/trips/hooks";
 import { ParsePanel } from "@/features/trips/parse-panel";
-import { TRIP_FORM_SECTIONS, tripToForm, TripFormFields, validateTripForm, type TripFormState } from "@/features/trips/trip-form";
+import { RequirementsGlance, tripToForm, TripFormFields, validateTripForm, type TripFormState } from "@/features/trips/trip-form";
 import type { Trip, TripDetail } from "@/features/trips/types";
 
 const PlanningPanel = dynamic(() => import("@/features/planning/planning-panel").then((module) => module.PlanningPanel), {
@@ -146,7 +145,15 @@ function EditRequirements({ trip }: { trip: Trip }) {
   const dirty = JSON.stringify(form) !== JSON.stringify(tripToForm(trip));
   return (
     <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-      <RequirementsGlance form={form} dirty={dirty} />
+      <RequirementsGlance
+        form={form}
+        note={
+          <>
+            {dirty ? <span className="tw-hand block text-[1.15rem]">remember to save</span> : null}
+            Changing dates or guests does not change an existing itinerary or packages. Re-check the itinerary and run the optimisation again afterwards.
+          </>
+        }
+      />
     <form
       noValidate
       className="flex min-w-0 flex-col gap-6"
@@ -181,56 +188,6 @@ function EditRequirements({ trip }: { trip: Trip }) {
       </div>
     </form>
     </div>
-  );
-}
-
-/** A live summary of the form beside it, with jump links to each section and the effect of saving. */
-function RequirementsGlance({ form, dirty }: { form: TripFormState; dirty: boolean }) {
-  const nights = form.arrivalDate && form.departureDate ? Math.round((Date.parse(form.departureDate) - Date.parse(form.arrivalDate)) / 86_400_000) : null;
-  const done: Record<(typeof TRIP_FORM_SECTIONS)[number]["id"], boolean> = {
-    "trip-basics": !!form.title.trim() && !!form.arrivalDate && !!form.departureDate,
-    "trip-guests": form.adults > 0 && form.rooms.length > 0,
-    "trip-budget": form.budgetMinor !== null,
-    "trip-hotels": !!(form.category || form.mealPlan || form.requiredAmenities.length || form.preferredAmenities.length),
-  };
-  const facts = [
-    { icon: CalendarDays, text: form.arrivalDate ? `${dateRange(form.arrivalDate, form.departureDate)}${nights && nights > 0 ? ` · ${nightsLabel(nights)}` : ""}` : "Dates not set" },
-    { icon: Users, text: `${form.adults} adult${form.adults === 1 ? "" : "s"}${form.children ? `, ${form.children} child${form.children === 1 ? "" : "ren"}` : ""} · ${form.rooms.length} room${form.rooms.length === 1 ? "" : "s"}` },
-    { icon: Wallet, text: form.budgetMinor !== null ? money(form.budgetMinor, form.budgetCurrency) : "No budget given" },
-    { icon: Hotel, text: [form.category ? titleCase(form.category) : null, form.mealPlan ? (MEAL_PLAN_LABELS[form.mealPlan as MealPlan] ?? form.mealPlan) : null].filter(Boolean).join(" · ") || "No hotel preferences" },
-  ];
-  return (
-    <aside aria-label="Requirements at a glance" className="lg:sticky lg:top-20 lg:self-start">
-      <div className="tw-surface flex flex-col gap-4 rounded-2xl border border-border p-5">
-        <div>
-          <p className="tw-kicker">At a glance</p>
-          <p className="tw-trip-display mt-1.5 text-[1.35rem] leading-tight break-words">{form.title.trim() || "Untitled trip"}</p>
-        </div>
-        <ul className="flex flex-col gap-2.5">
-          {facts.map(({ icon: Icon, text }) => (
-            <li key={text} className="flex items-start gap-2.5 text-[13px] leading-snug">
-              <Icon className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
-              <span className="min-w-0 break-words">{text}</span>
-            </li>
-          ))}
-        </ul>
-        <nav aria-label="Requirement sections" className="flex flex-col border-t border-border pt-3">
-          {TRIP_FORM_SECTIONS.map((section, index) => (
-            <a key={section.id} href={`#${section.id}`} className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] transition hover:bg-muted">
-              <span aria-hidden className={`grid size-5 shrink-0 place-items-center rounded-full border text-[10px] font-semibold ${done[section.id] ? "border-success bg-success text-white" : "border-border text-muted-foreground"}`}>
-                {done[section.id] ? <Check className="size-3" /> : index + 1}
-              </span>
-              <span className="min-w-0 flex-1 truncate">{section.title}</span>
-              <ArrowRight className="size-3.5 text-muted-foreground opacity-0 transition group-hover:opacity-100" aria-hidden />
-            </a>
-          ))}
-        </nav>
-        <p className="border-t border-border pt-3 text-[11.5px] leading-relaxed text-muted-foreground">
-          {dirty ? <span className="tw-hand block text-[1.15rem]">remember to save</span> : null}
-          Changing dates or guests does not change an existing itinerary or packages. Re-check the itinerary and run the optimisation again afterwards.
-        </p>
-      </div>
-    </aside>
   );
 }
 

@@ -2,13 +2,14 @@ import { nightsBetween, type HotelCategory, type NormalisedOffer } from "@tripwe
 import { fetchJson, mapWithConcurrency, type FetchLike } from "./resilience";
 import {
   chooseGoogleHotelsEntityRate,
+  encodeGoogleHotelsTs,
   fetchGoogleHotelsEntity,
   GoogleHotelsDirectError,
   type GoogleHotelsEntity,
 } from "./google-hotels-direct";
 import { ProviderError, type HotelAvailabilityInput, type HotelProvider, type HotelSearchCache, type HotelSearchInput, type PriceCheckInput, type PriceCheckResult, type PropertySearchResult, type RoomOffer } from "./types";
 import { normalizeHotelName } from "./discovery";
-import { chooseGoogleLiveRate, googleAmount, parseGooglePropertyRates } from "./google-hotels-recheck";
+import { chooseGoogleLiveRate, googleAmount, httpsLink, parseGooglePropertyRates } from "./google-hotels-recheck";
 
 export const GOOGLE_HOTELS_PROVIDER_KEY = "google_hotels";
 
@@ -81,6 +82,14 @@ interface GoogleProperty {
   reviews?: number;
   amenities?: string[];
   description?: string;
+  images?: GoogleImage[];
+  check_in_time?: string;
+  check_out_time?: string;
+}
+
+interface GoogleImage {
+  thumbnail?: string;
+  original_image?: string;
 }
 
 interface GoogleHotelsResponse {
@@ -91,6 +100,7 @@ interface GoogleHotelsResponse {
 interface GooglePropertyDetailsResponse {
   error?: string;
   property_token?: string;
+  images?: GoogleImage[];
   featured_prices?: unknown[];
   prices?: unknown[];
 }
@@ -134,6 +144,130 @@ export function mealPlanFromGoogle(amenities: string[] | undefined): {
   if (list.some((a) => /free breakfast|breakfast included/i.test(a))) return { mealPlan: "BB", basis: "free", boardBasisSource: "property_amenity" };
   if (list.some((a) => /breakfast/i.test(a))) return { mealPlan: "RO", basis: "paid", boardBasisSource: "property_amenity" };
   return { mealPlan: "RO", basis: "unknown", boardBasisSource: "unknown" };
+}
+
+/** One hotel photograph from Google Hotels: a small Google-hosted thumbnail and the full-size source. */
+export interface GoogleHotelPhoto {
+  thumbnail: string;
+  original: string | null;
+}
+
+/** At most this many photos are kept per property; enough for a card gallery, small enough to store. */
+export const GOOGLE_PHOTO_LIMIT = 8;
+
+function httpsUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2_000) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keeps only https image URLs, drops duplicates and bounds the count. */
+export function photosFromGoogle(images: unknown): GoogleHotelPhoto[] {
+  if (!Array.isArray(images)) return [];
+  const seen = new Set<string>();
+  const out: GoogleHotelPhoto[] = [];
+  for (const image of images as GoogleImage[]) {
+    const thumbnail = httpsUrl(image?.thumbnail);
+    const original = httpsUrl(image?.original_image);
+    const key = thumbnail ?? original;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ thumbnail: thumbnail ?? original!, original });
+    if (out.length >= GOOGLE_PHOTO_LIMIT) break;
+  }
+  return out;
+}
+
+/**
+ * Photos for one property from its Google Hotels details page. Used to add photographs to offers that
+ * were stored before search results kept them; the caller caches the result per property token.
+ */
+export async function fetchGoogleHotelPhotos(args: {
+  apiKey: string;
+  baseUrl?: string;
+  token: string;
+  checkIn: string;
+  checkOut: string;
+  currency?: string;
+  fetchImpl?: FetchLike;
+  timeoutMs?: number;
+}): Promise<GoogleHotelPhoto[]> {
+  const q = new URLSearchParams({
+    engine: "google_hotels",
+    property_token: args.token,
+    check_in_date: args.checkIn,
+    check_out_date: args.checkOut,
+    adults: "2",
+    currency: args.currency ?? "USD",
+    hl: "en",
+    gl: "us",
+    api_key: args.apiKey,
+  });
+  const fetchImpl = args.fetchImpl ?? ((u: string, i?: RequestInit) => fetch(u, i));
+  const res = await fetchJson<GooglePropertyDetailsResponse>(GOOGLE_HOTELS_PROVIDER_KEY, fetchImpl, `${args.baseUrl ?? "https://serpapi.com/search.json"}?${q.toString()}`, { headers: { Accept: "application/json" } }, args.timeoutMs ?? 15_000);
+  if (res?.error) throw new ProviderError(GOOGLE_HOTELS_PROVIDER_KEY, "upstream", `Google Hotels photo lookup failed: ${res.error}`);
+  return photosFromGoogle(res?.images);
+}
+
+/** A one-click link to see or book a stay, with the stay's dates and guests already filled in. */
+export interface HotelBookingLink {
+  kind: "seller" | "google" | "website";
+  label: string;
+  url: string;
+}
+
+function hostLabel(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Booking links for a Google Hotels stay, best first: the seller whose rate was live-checked (Google's
+ * dated redirect to Booking.com, Agoda and the like), the Google Hotels page for the property with the
+ * dates and room party set, which lists every seller, and the hotel's own website. Booking sites do not
+ * resolve a hotel by name from a URL, so no search link is built for them.
+ */
+export function bookingLinksForOffer(offer: NormalisedOffer): HotelBookingLink[] {
+  if (offer.providerKey !== GOOGLE_HOTELS_PROVIDER_KEY || offer.isMock) return [];
+  const meta = offer.providerMetadata ?? {};
+  const links: HotelBookingLink[] = [];
+  const recheck = (meta.recheck ?? null) as { link?: unknown; source?: unknown } | null;
+  const sellerUrl = httpsUrl(recheck?.link);
+  if (sellerUrl) {
+    const seller = typeof recheck?.source === "string" ? recheck.source : typeof meta.cheapestSource === "string" ? meta.cheapestSource : "the seller";
+    links.push({ kind: "seller", label: `Book on ${seller}`, url: sellerUrl });
+  }
+
+  const rooms = offer.occupancy.rooms.length ? offer.occupancy.rooms : [{ adults: offer.occupancy.adults, children: offer.occupancy.children, childAges: offer.occupancy.childAges }];
+  const roomCount = Math.max(1, offer.roomsRequired);
+  const token = typeof meta.propertyToken === "string" ? meta.propertyToken : null;
+  if (token && /^[A-Za-z0-9_-]{8,200}$/.test(token)) {
+    try {
+      const url = new URL(`https://www.google.com/travel/hotels/entity/${token}`);
+      url.searchParams.set("q", `${offer.property.name} ${offer.property.destination}`);
+      // Google prices one room, and the package was priced from its largest room, so the link asks for
+      // that room: the sellers it lists then show the same per-room rate the package multiplies.
+      const largest = rooms.reduce((best, r) => (r.adults + r.children > best.adults + best.children ? r : best), rooms[0]!);
+      const largestAges = largest.childAges?.length ? largest.childAges : Array.from({ length: largest.children }, () => 8);
+      url.searchParams.set("ts", encodeGoogleHotelsTs({ checkIn: offer.stayStart, checkOut: offer.stayEnd, adults: Math.max(1, largest.adults), childAges: largestAges, rooms: 1, currency: offer.currency }));
+      url.searchParams.set("hl", "en");
+      url.searchParams.set("gl", "us");
+      links.push({ kind: "google", label: roomCount > 1 ? `Compare on Google Hotels (per room, ×${roomCount})` : "Compare on Google Hotels", url: url.toString() });
+    } catch {
+      // Dates that cannot be encoded leave the stay without a Google link.
+    }
+  }
+
+  const website = httpsUrl(meta.link);
+  if (website) links.push({ kind: "website", label: hostLabel(website) ?? "Hotel website", url: website });
+  return links;
 }
 
 export function categoryFromStars(stars: number | undefined): HotelCategory {
@@ -400,7 +534,11 @@ export class GoogleHotelsProvider implements HotelProvider {
           googleRating: p.overall_rating ?? null,
           reviews: p.reviews ?? null,
           propertyToken: p.property_token ?? null,
-          link: p.link ?? null,
+          link: httpsUrl(p.link),
+          images: photosFromGoogle(p.images),
+          description: typeof p.description === "string" ? p.description.slice(0, 400) : null,
+          checkInTime: typeof p.check_in_time === "string" ? p.check_in_time.slice(0, 20) : null,
+          checkOutTime: typeof p.check_out_time === "string" ? p.check_out_time.slice(0, 20) : null,
         },
         isMock: false,
       });
@@ -566,7 +704,7 @@ export class GoogleHotelsProvider implements HotelProvider {
     const partySize = Math.max(1, perRoom.adults + perRoom.children);
     const requiresBreakfast = offer.mealPlan === "BB" && offer.mealPlanStatus === "confirmed";
     const rooms = Math.max(1, offer.roomsRequired);
-    let rate: { source: string; room: string | null; guests: number | null; totalMinor: number; breakfast: string; freeCancellation: boolean | null } | null = null;
+    let rate: { source: string; room: string | null; guests: number | null; totalMinor: number; breakfast: string; freeCancellation: boolean | null; link: string | null } | null = null;
     let priceSources: { source: string; totalMinor: number }[] = [];
 
     if (requiresBreakfast) {
@@ -603,6 +741,7 @@ export class GoogleHotelsProvider implements HotelProvider {
           totalMinor: Math.round(entityRate.total * 100) * rooms,
           breakfast: entityRate.breakfast,
           freeCancellation: entityRate.cancellation ? /free cancellation/i.test(entityRate.cancellation) : null,
+          link: httpsLink(entityRate.link?.startsWith("/") ? `https://www.google.com${entityRate.link}` : entityRate.link),
         };
       }
       priceSources = entity.rates.map((r) => ({ source: r.source, totalMinor: Math.round(r.total * 100) * rooms }));
@@ -617,6 +756,7 @@ export class GoogleHotelsProvider implements HotelProvider {
           totalMinor: liveRate.totalMinor,
           breakfast: liveRate.breakfast,
           freeCancellation: liveRate.freeCancellation,
+          link: liveRate.link,
         };
       }
       priceSources = (rates ?? []).map((r) => ({ source: r.source, totalMinor: r.totalMinor }));
@@ -665,6 +805,7 @@ export class GoogleHotelsProvider implements HotelProvider {
           previousTotalMinor: offer.totalAmountMinor,
           currentTotalMinor,
           method: requiresBreakfast ? "entity_rate" : "property_details",
+          link: rate.link,
         },
       },
     };

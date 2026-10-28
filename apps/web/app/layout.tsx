@@ -23,7 +23,7 @@ const BOOT = `if(!window.__twBoot){window.__twBoot=1;document.documentElement.cl
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jakarta.variable} ${instrument.variable} ${caveat.variable}`} suppressHydrationWarning>
+    <html lang="en" data-scroll-behavior="smooth" className={`${inter.variable} ${jakarta.variable} ${instrument.variable} ${caveat.variable}`} suppressHydrationWarning>
       <body>
         {/* Enables reveal-on-scroll hidden states (content stays visible without JS) and plays the landing intro once per session. */}
         <Script id="tw-boot" strategy="beforeInteractive">

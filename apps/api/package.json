@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "wrangler dev --port 8787 --persist-to ../../.wrangler/state",
+    "dev": "node ../../scripts/free-port.mjs 8787 && wrangler dev --port 8787 --persist-to ../../.wrangler/state",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json",
     "cf-typegen": "wrangler types src/worker-configuration.d.ts",

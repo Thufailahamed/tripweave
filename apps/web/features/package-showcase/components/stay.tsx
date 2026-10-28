@@ -4,11 +4,11 @@ import { defineComponent } from "@openuidev/react-lang";
 import { PACKAGE_PROP_SCHEMAS, packageShowcaseDescriptions } from "@tripweave/planning-contract";
 import { Alert, Badge } from "@/components/ui/card";
 import { AvailabilityBadges, cancellationText } from "@/features/trips/availability-badge";
-import { CoverImage } from "@/features/hotels/hotel-card";
 import { cn, formatDate, formatDateTime, mealLabel, nightsLabel, titleCase } from "@/lib/utils";
 import { resolveShowcaseOffer, resolveShowcasePackage } from "../helpers";
 import { usePackageShowcase } from "../context";
 import { MissingEntity, Stars } from "./shared";
+import { googleRatingOf, hotelPhotosOf, HotelPhotoImage } from "../photos";
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -24,7 +24,7 @@ export const HotelStay = defineComponent({
   description: packageShowcaseDescriptions.HotelStay,
   props: PACKAGE_PROP_SCHEMAS.HotelStay,
   component: function HotelStayView({ props }) {
-    const { snapshot } = usePackageShowcase();
+    const { snapshot, photos } = usePackageShowcase();
     const entry = resolveShowcaseOffer(snapshot, props.offerId);
     if (!entry) return <MissingEntity what="hotel" />;
     const offer = entry.offer;
@@ -32,11 +32,14 @@ export const HotelStay = defineComponent({
     if (props.packageId && (!pkg || !entry.packageIds.includes(pkg.id))) return <MissingEntity what="hotel in that package" />;
     const sourceName = offer.supplierName || offer.providerKey;
     const reviewed = offer.property.reviewScore !== null;
+    const google = googleRatingOf(offer);
 
     return (
       <article aria-label={`Stay at ${offer.property.name}`} className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card sm:flex-row">
         <div className="relative h-44 shrink-0 bg-muted sm:h-auto sm:w-56">
-          <CoverImage imageId={entry.coverImageId} alt={offer.property.name} className="absolute inset-0 size-full" />
+          <div className="absolute inset-0">
+            <HotelPhotoImage photo={hotelPhotosOf(offer, entry.coverImageId, photos)[0]} alt={offer.property.name} destination={entry.destination} width={480} height={400} />
+          </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-4 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -48,7 +51,9 @@ export const HotelStay = defineComponent({
               <h3 className="font-display text-xl font-semibold leading-snug tracking-[-0.02em]">{offer.property.name}</h3>
               <Stars count={offer.property.starRating} />
             </div>
-            <Badge tone={reviewed ? "primary" : "neutral"}>{reviewed ? `${offer.property.reviewScore}/10 review` : "Unrated"}</Badge>
+            <Badge tone={reviewed ? "primary" : "neutral"}>
+              {google ? `${google.rating.toFixed(1)}/5 on Google${google.reviews !== null ? ` · ${google.reviews.toLocaleString()} reviews` : ""}` : reviewed ? `${offer.property.reviewScore}/10 review` : "Unrated"}
+            </Badge>
           </div>
 
           <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">

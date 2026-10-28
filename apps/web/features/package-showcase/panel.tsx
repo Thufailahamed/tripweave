@@ -1,19 +1,16 @@
 "use client";
 import * as React from "react";
-import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { Renderer } from "@openuidev/react-lang";
 import { Sparkles } from "lucide-react";
-import { toast } from "sonner";
 import type { PackageShowcaseSnapshot } from "@tripweave/planning-contract";
 import { Alert, LoadingBlock } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { apiPost, errorMessage } from "@/lib/api";
-import { tripKeys } from "@/features/trips/hooks";
+import { errorMessage } from "@/lib/api";
+import { useShowcaseActions, type PackageEdit } from "./actions";
 import { PackageShowcaseProvider } from "./context";
 import { getPackageShowcaseRenderLibrary } from "./library";
 import { fetchPackageSnapshot, streamPackagePresentation, type PackagePresentationDone } from "./use-package-stream";
-import { needsLiveCheck, resolveShowcasePackage } from "./helpers";
+import type { HotelPhoto } from "./photos";
 
 type Status = "streaming" | "done" | "error";
 
@@ -35,9 +32,19 @@ class PresentationBoundary extends React.Component<{ children: React.ReactNode }
  * snapshot; every value is rendered from that snapshot, and actions are performed here through fixed
  * operations that the server checks again.
  */
-export function PackageStoryPanel({ tripId, jobId, onFocusPackage }: { tripId: string; jobId: string; onFocusPackage: (packageId: string) => void }) {
-  const router = useRouter();
-  const qc = useQueryClient();
+export function PackageStoryPanel({
+  tripId,
+  jobId,
+  onFocusPackage,
+  onEditPackage,
+  photos,
+}: {
+  tripId: string;
+  jobId: string;
+  onFocusPackage: (packageId: string) => void;
+  onEditPackage?: (packageId: string, edit: PackageEdit) => void;
+  photos?: Record<string, HotelPhoto[]>;
+}) {
   const library = React.useMemo(() => getPackageShowcaseRenderLibrary(), []);
   const [snapshot, setSnapshot] = React.useState<PackageShowcaseSnapshot | null>(null);
   const [program, setProgram] = React.useState("");
@@ -45,7 +52,6 @@ export function PackageStoryPanel({ tripId, jobId, onFocusPackage }: { tripId: s
   const [done, setDone] = React.useState<PackagePresentationDone | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [focusDraft, setFocusDraft] = React.useState("");
-  const [pending, setPending] = React.useState<string | null>(null);
   const controllerRef = React.useRef<AbortController | null>(null);
 
   const compose = React.useCallback(
@@ -97,64 +103,7 @@ export function PackageStoryPanel({ tripId, jobId, onFocusPackage }: { tripId: s
     setSnapshot(fresh.snapshot);
   }, [tripId, jobId]);
 
-  const runAction = async (key: string, work: () => Promise<void>) => {
-    setPending(key);
-    try {
-      await work();
-    } catch (caught) {
-      toast.error(errorMessage(caught));
-    } finally {
-      setPending(null);
-    }
-  };
-
-  const validatePackage = (packageId: string, ref: string) =>
-    runAction(`validate_package:${ref}`, async () => {
-      const result = await apiPost<{ verification: { allVerified: boolean }; changed: boolean }>(`/packages/${packageId}/validate`, {});
-      await refreshSnapshot();
-      void qc.invalidateQueries({ queryKey: ["trips", "packages", tripId] });
-      void qc.invalidateQueries({ queryKey: tripKeys.detail(tripId) });
-      if (result.verification.allVerified) toast.success(result.changed ? "Live prices checked; package totals updated" : "Live prices checked");
-      else toast.error("Live price check failed. The package cannot be quoted.");
-    });
-
-  const createQuote = (packageId: string, ref: string) =>
-    runAction(`create_quote:${ref}`, async () => {
-      const quote = await apiPost<{ id: string }>("/quotes", { tripRequestId: tripId, packageId });
-      void qc.invalidateQueries({ queryKey: tripKeys.detail(tripId) });
-      toast.success("Quotation created");
-      router.push(`/quotes/${quote.id}`);
-    });
-
-  const handleAction = (event: { type: string; params?: Record<string, unknown> }) => {
-    const ref = typeof event.params?.packageId === "string" ? event.params.packageId : null;
-    const pkg = ref && snapshot ? resolveShowcasePackage(snapshot, ref) : null;
-    switch (event.type) {
-      case "focus_package":
-        if (pkg) onFocusPackage(pkg.id);
-        return;
-      case "validate_package":
-        if (pkg) void validatePackage(pkg.id, pkg.ref);
-        return;
-      case "create_quote":
-        if (!pkg) return;
-        // The quotation API enforces this too; checking here explains the refusal before a round trip.
-        if (needsLiveCheck(pkg)) {
-          toast.error("Check live prices before creating a quotation.");
-          return;
-        }
-        void createQuote(pkg.id, pkg.ref);
-        return;
-      case "open_itinerary":
-        router.push(`/trips/${tripId}/itinerary`);
-        return;
-      case "open_optimise":
-        router.push(`/trips/${tripId}/optimise`);
-        return;
-      default:
-        toast.info("That action is not available here.");
-    }
-  };
+  const { pending, handleAction } = useShowcaseActions({ tripId, snapshot, onValidated: refreshSnapshot, onFocusPackage, onEditPackage });
 
   const composing = status === "streaming";
   const showStory = !!snapshot && program.length > 0;
@@ -201,7 +150,7 @@ export function PackageStoryPanel({ tripId, jobId, onFocusPackage }: { tripId: s
 
       {showStory && snapshot ? (
         <PresentationBoundary>
-          <PackageShowcaseProvider snapshot={snapshot} pending={pending}>
+          <PackageShowcaseProvider snapshot={snapshot} pending={pending} photos={photos} surface="story">
             <Renderer library={library} response={program} isStreaming={composing} publishObservability={false} onAction={(event) => handleAction(event as { type: string; params?: Record<string, unknown> })} />
           </PackageShowcaseProvider>
         </PresentationBoundary>

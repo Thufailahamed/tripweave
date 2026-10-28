@@ -42,10 +42,10 @@ export function shortCancellation(cancellation: NormalisedOffer["cancellation"])
   return "Terms unknown";
 }
 
-export function budgetText(difference: number | null, currency: string, perTraveller = false): string {
+export function budgetText(difference: number | null, currency: string, perTraveller = false, format: (minor: number, currency: string) => string = money): string {
   if (difference === null) return "No budget comparison";
   const suffix = perTraveller ? " per traveller" : "";
-  return difference >= 0 ? `${money(difference, currency)}${suffix} under budget` : `${money(-difference, currency)}${suffix} over budget`;
+  return difference >= 0 ? `${format(difference, currency)}${suffix} under budget` : `${format(-difference, currency)}${suffix} over budget`;
 }
 
 export function ScoreRing({ score, className }: { score: number; className?: string }) {

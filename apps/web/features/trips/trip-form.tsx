@@ -1,12 +1,12 @@
 "use client";
 import * as React from "react";
-import { BedDouble, Hotel, NotebookPen, Plus, Trash2, Wallet } from "lucide-react";
-import { HOTEL_CATEGORIES, MEAL_PLANS, MEAL_PLAN_LABELS, tripRequestSchema, SUPPORTED_CURRENCIES, type SpecialRequirements } from "@tripweave/shared";
+import { ArrowRight, BedDouble, CalendarDays, Check, Hotel, NotebookPen, Plus, Trash2, Users, Wallet } from "lucide-react";
+import { HOTEL_CATEGORIES, MEAL_PLANS, MEAL_PLAN_LABELS, tripRequestSchema, SUPPORTED_CURRENCIES, type MealPlan, type SpecialRequirements } from "@tripweave/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, IconTile } from "@/components/ui/card";
 import { Field, Input, MoneyInput, Select, Switch, Textarea } from "@/components/ui/form";
 import { CustomerPicker } from "@/features/customers/customer-picker";
-import { cn, titleCase } from "@/lib/utils";
+import { cn, dateRange, money, nightsLabel, titleCase } from "@/lib/utils";
 import { TagInput } from "./tag-input";
 import type { Trip } from "./types";
 
@@ -317,3 +317,49 @@ export function TripFormFields({ value, onChange, errors }: { value: TripFormSta
   );
 }
 
+/** A live summary of the form beside it, with jump links to each section and a page-specific note. */
+export function RequirementsGlance({ form, note }: { form: TripFormState; note?: React.ReactNode }) {
+  const nights = form.arrivalDate && form.departureDate ? Math.round((Date.parse(form.departureDate) - Date.parse(form.arrivalDate)) / 86_400_000) : null;
+  const done: Record<(typeof TRIP_FORM_SECTIONS)[number]["id"], boolean> = {
+    "trip-basics": !!form.title.trim() && !!form.arrivalDate && !!form.departureDate,
+    "trip-guests": form.adults > 0 && form.rooms.length > 0,
+    "trip-budget": form.budgetMinor !== null,
+    "trip-hotels": !!(form.category || form.mealPlan || form.requiredAmenities.length || form.preferredAmenities.length),
+  };
+  const facts = [
+    { icon: CalendarDays, text: form.arrivalDate ? `${dateRange(form.arrivalDate, form.departureDate)}${nights && nights > 0 ? ` · ${nightsLabel(nights)}` : ""}` : "Dates not set" },
+    { icon: Users, text: `${form.adults} adult${form.adults === 1 ? "" : "s"}${form.children ? `, ${form.children} child${form.children === 1 ? "" : "ren"}` : ""} · ${form.rooms.length} room${form.rooms.length === 1 ? "" : "s"}` },
+    { icon: Wallet, text: form.budgetMinor !== null ? money(form.budgetMinor, form.budgetCurrency) : "No budget given" },
+    { icon: Hotel, text: [form.category ? titleCase(form.category) : null, form.mealPlan ? (MEAL_PLAN_LABELS[form.mealPlan as MealPlan] ?? form.mealPlan) : null].filter(Boolean).join(" · ") || "No hotel preferences" },
+  ];
+  return (
+    <aside aria-label="Requirements at a glance" className="lg:sticky lg:top-20 lg:self-start">
+      <div className="tw-surface flex flex-col gap-4 rounded-2xl border border-border p-5">
+        <div>
+          <p className="tw-kicker">At a glance</p>
+          <p className="tw-trip-display mt-1.5 text-[1.35rem] leading-tight break-words">{form.title.trim() || "Untitled trip"}</p>
+        </div>
+        <ul className="flex flex-col gap-2.5">
+          {facts.map(({ icon: Icon, text }) => (
+            <li key={text} className="flex items-start gap-2.5 text-[13px] leading-snug">
+              <Icon className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
+              <span className="min-w-0 break-words">{text}</span>
+            </li>
+          ))}
+        </ul>
+        <nav aria-label="Requirement sections" className="flex flex-col border-t border-border pt-3">
+          {TRIP_FORM_SECTIONS.map((section, index) => (
+            <a key={section.id} href={`#${section.id}`} className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] transition hover:bg-muted">
+              <span aria-hidden className={`grid size-5 shrink-0 place-items-center rounded-full border text-[10px] font-semibold ${done[section.id] ? "border-success bg-success text-white" : "border-border text-muted-foreground"}`}>
+                {done[section.id] ? <Check className="size-3" /> : index + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{section.title}</span>
+              <ArrowRight className="size-3.5 text-muted-foreground opacity-0 transition group-hover:opacity-100" aria-hidden />
+            </a>
+          ))}
+        </nav>
+        {note ? <p className="border-t border-border pt-3 text-[11.5px] leading-relaxed text-muted-foreground">{note}</p> : null}
+      </div>
+    </aside>
+  );
+}

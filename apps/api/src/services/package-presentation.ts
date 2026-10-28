@@ -1,5 +1,6 @@
 import type { PlanningHotelOffer, PlanningPackageView } from "@tripweave/planning-contract";
 import { inventory, trips, type Db } from "@tripweave/database";
+import { bookingLinksForOffer } from "@tripweave/provider-contracts";
 import { formatMoney } from "@tripweave/shared";
 import type { AppContext } from "../lib/http";
 import { getTenant } from "../middleware/auth";
@@ -103,6 +104,8 @@ export async function presentPackageList(c: AppContext, records: trips.PackageRe
 export async function presentReferencedPackages(c: AppContext, records: trips.PackageRecord[]): Promise<{ packages: PlanningPackageView[]; offers: PlanningHotelOffer[] }> {
   const packages = ((await presentPackageList(c, records)) as unknown as PlanningPackageView[]).map((pkg, index) => ({ ...pkg, ref: `pkg_${index + 1}` }));
   const offersById = new Map<string, PlanningHotelOffer>();
+  // Booking links name the supplier and lead to its price, so they follow the same rule as supplier costs.
+  const showLinks = getTenant(c).permissions.has("margins:view");
   for (const pkg of packages) {
     for (const selection of pkg.package.selections) {
       const existing = offersById.get(selection.offer.offerId);
@@ -117,6 +120,7 @@ export async function presentReferencedPackages(c: AppContext, records: trips.Pa
           destination: selection.destination,
           offer: selection.offer,
           coverImageId: selection.coverImageId ?? null,
+          ...(showLinks ? { bookingLinks: bookingLinksForOffer(selection.offer) } : {}),
         });
       }
     }
