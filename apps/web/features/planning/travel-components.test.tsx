@@ -130,6 +130,14 @@ day = DayPlan("Day 2", "Slow morning", ["Breakfast on the terrace"])`);
     expect(screen.queryByRole("button", { name: "Add to itinerary" })).not.toBeInTheDocument();
   });
 
+  it("offers the same apply action on a magazine day board", () => {
+    const onAction = renderProgram(`root = PlanningCanvas("Board", [board])
+board = DayBoard("Four days", [d1], "easy pace")
+d1 = BoardDay("Day 1", ["Kandy, Sri Lanka", "Nuwara Eliya, Sri Lanka"], "Lake and tea")`, vi.fn(), "traveler");
+    fireEvent.click(screen.getByRole("button", { name: "Add to itinerary" }));
+    expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ type: "apply_day", params: { day: "Day 1", title: "Lake and tea", activities: ["Kandy, Sri Lanka", "Nuwara Eliya, Sri Lanka"] } }));
+  });
+
   it("uses a generated postcard when the place has no free photograph", async () => {
     stubPlaces({ imageUrl: null });
     renderProgram(`root = PlanningCanvas("Places", [card], "Ideas.")

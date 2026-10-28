@@ -25,7 +25,7 @@ Covers roadmap phases 1–7 of the master prompt. "Verified" means executed in t
 ## Verification performed
 | Check | Result |
 |---|---|
-| `pnpm test` — 48 files, 440 tests (pricing, itinerary, optimiser, providers incl. Amadeus, AI, OpenUI planning, renderer incl. Unicode PDF, D1 repositories, API e2e, security, MFA/email verification, XLSX import, platform admin, traveller APIs/packing/public sharing, apply-day flow) on real migrations over SQLite | pass |
+| `pnpm test` — 48 files, 441 tests (pricing, itinerary, optimiser, providers incl. Amadeus, AI, OpenUI planning, renderer incl. Unicode PDF, D1 repositories, API e2e, security, MFA/email verification, XLSX import, platform admin, traveller APIs/packing/public sharing, apply-day flow) on real migrations over SQLite | pass |
 | Migration 0006 applied with `wrangler d1 migrations apply --local` (real D1 runtime); `wrangler deploy --dry-run` bundles the Worker (4.7 MB, 1.6 MB gzip, within the 3 MB free-plan limit); `next build` passes | pass |
 | Sample Sinhala/Tamil/Cyrillic/Greek quotation PDF rendered with pdf.js and inspected by eye | pass (see below) |
 | `pnpm typecheck` (strict TS, all packages + API + web) | pass |
