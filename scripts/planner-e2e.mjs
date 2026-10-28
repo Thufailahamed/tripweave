@@ -166,7 +166,7 @@ async function openPlanner(browser, seeded, viewport, scheme = "light") {
   await page.goto(`${WEB}/trips/${seeded.tripId}`, { waitUntil: "domcontentloaded" });
   await page.getByRole("heading", { name: "Kandy and Ella" }).first().waitFor({ timeout: 60_000 });
   await page.getByRole("tab", { name: "AI planner" }).click();
-  await page.getByText("What shall we plan next?").waitFor({ timeout: 30_000 });
+  await page.getByRole("heading", { name: "What shall we plan next?" }).waitFor({ timeout: 30_000 });
   return { context, page, errors, posts };
 }
 

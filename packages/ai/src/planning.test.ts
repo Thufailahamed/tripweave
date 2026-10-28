@@ -111,12 +111,19 @@ describe("general travel planning", () => {
   });
 });
 
+describe("map requirement in the prompt", () => {
+  it("tells the model up front when the server will require a map", () => {
+    expect(JSON.parse(buildPlanningPrompt(snapshot, { message: "Where should we eat near the temple?" }).user).replyRequirements).toEqual([expect.stringContaining("PlaceMap")]);
+    expect(JSON.parse(buildPlanningPrompt(snapshot, { message: "What should we pack?" }).user).replyRequirements).toBeUndefined();
+  });
+});
+
 describe("map requirement", () => {
   it("recognises questions about where places are, routes and distances", () => {
-    for (const message of ["Where should we stay near Ella?", "Show me on a map", "How far is Kandy from Galle?", "Route from Kandy to Ella", "What is between Colombo and Galle?", "How do I get from Ella to Kandy?"]) {
+    for (const message of ["Where should we stay near Ella?", "Show me on a map", "How far is Kandy from Galle?", "Route from Kandy to Ella", "What is between Colombo and Galle?", "How do I get from Ella to Kandy?", "Where are the hotels on this route?", "Show the hotels near Ella on a map"]) {
       expect(requestNeedsMap(message), message).toBe(true);
     }
-    for (const message of ["What should we pack?", "Plan a relaxed day", "Suggest a tea estate experience"]) {
+    for (const message of ["What should we pack?", "Plan a relaxed day", "Suggest a tea estate experience", "Show me some hotel options for this route", "Which package is best for this route?"]) {
       expect(requestNeedsMap(message), message).toBe(false);
     }
   });

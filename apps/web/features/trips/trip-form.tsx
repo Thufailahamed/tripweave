@@ -1,9 +1,9 @@
 "use client";
 import * as React from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { BedDouble, Hotel, NotebookPen, Plus, Trash2, Wallet } from "lucide-react";
 import { HOTEL_CATEGORIES, MEAL_PLANS, MEAL_PLAN_LABELS, tripRequestSchema, SUPPORTED_CURRENCIES, type SpecialRequirements } from "@tripweave/shared";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, IconTile } from "@/components/ui/card";
 import { Field, Input, MoneyInput, Select, Switch, Textarea } from "@/components/ui/form";
 import { CustomerPicker } from "@/features/customers/customer-picker";
 import { cn, titleCase } from "@/lib/utils";
@@ -117,6 +117,29 @@ const SCOPES = [
   { value: "all_inclusive_trip", title: "Whole trip", text: "The budget also has to cover transport, activities and guides. It cannot limit hotels on its own, so the optimiser does not apply it as a hotel cap." },
 ];
 
+/** Anchors for the form's sections, so a page can link to them. */
+export const TRIP_FORM_SECTIONS = [
+  { id: "trip-basics", title: "Trip basics" },
+  { id: "trip-guests", title: "Guests and rooms" },
+  { id: "trip-budget", title: "Budget" },
+  { id: "trip-hotels", title: "Hotel preferences" },
+] as const;
+
+function SectionHeader({ n, icon, title, description }: { n: number; icon: React.ComponentType<{ className?: string; strokeWidth?: number }>; title: string; description?: string }) {
+  return (
+    <CardHeader className="flex-row items-start gap-3">
+      <span aria-hidden className="tw-num font-display pt-0.5 text-[1.5rem] leading-none text-muted-foreground/45">
+        {String(n).padStart(2, "0")}
+      </span>
+      <div className="min-w-0 flex-1">
+        <CardTitle>{title}</CardTitle>
+        {description ? <CardDescription>{description}</CardDescription> : null}
+      </div>
+      <IconTile icon={icon} tone="primary" size="sm" />
+    </CardHeader>
+  );
+}
+
 export function TripFormFields({ value, onChange, errors }: { value: TripFormState; onChange: (next: TripFormState) => void; errors: Record<string, string> }) {
   const set = <K extends keyof TripFormState>(k: K, v: TripFormState[K]) => onChange({ ...value, [k]: v });
   const setRoom = (i: number, patch: Partial<RoomState>) => {
@@ -134,10 +157,8 @@ export function TripFormFields({ value, onChange, errors }: { value: TripFormSta
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Trip basics</CardTitle>
-        </CardHeader>
+      <Card id="trip-basics" className="scroll-mt-24">
+        <SectionHeader n={1} icon={NotebookPen} title="Trip basics" description="Who is travelling, when, and what they asked for." />
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Field label="Trip title" htmlFor="tf-title" error={err("title")} required className="sm:col-span-2">
             <Input id="tf-title" value={value.title} onChange={(e) => set("title", e.target.value)} maxLength={200} aria-invalid={!!err("title")} placeholder="e.g. Anderson family – Sri Lanka highlights" />
@@ -157,11 +178,8 @@ export function TripFormFields({ value, onChange, errors }: { value: TripFormSta
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Guests and rooms</CardTitle>
-          <CardDescription>Totals must equal what you allocate across rooms. Every room needs at least one adult.</CardDescription>
-        </CardHeader>
+      <Card id="trip-guests" className="scroll-mt-24">
+        <SectionHeader n={2} icon={BedDouble} title="Guests and rooms" description="Totals must equal what you allocate across rooms. Every room needs at least one adult." />
         <CardContent className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Total adults" htmlFor="tf-adults" error={err("party.adults")}>
@@ -224,10 +242,8 @@ export function TripFormFields({ value, onChange, errors }: { value: TripFormSta
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Budget</CardTitle>
-        </CardHeader>
+      <Card id="trip-budget" className="scroll-mt-24">
+        <SectionHeader n={3} icon={Wallet} title="Budget" description="The optimiser treats an accommodation budget as a hard limit." />
         <CardContent className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Budget amount" htmlFor="tf-budget" error={err("budgetAmountMinor")} hint="Leave blank if the customer has not given a budget.">
@@ -254,10 +270,8 @@ export function TripFormFields({ value, onChange, errors }: { value: TripFormSta
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Hotel preferences</CardTitle>
-        </CardHeader>
+      <Card id="trip-hotels" className="scroll-mt-24">
+        <SectionHeader n={4} icon={Hotel} title="Hotel preferences" description="Hard rules filter hotels out; preferences only change the score." />
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Field label="Preferred hotel category" htmlFor="tf-category" error={err("preferredHotelCategory")} hint="Guides scoring; it is a preference, not a hard rule.">
             <Select id="tf-category" value={value.category} onChange={(e) => set("category", e.target.value)}>

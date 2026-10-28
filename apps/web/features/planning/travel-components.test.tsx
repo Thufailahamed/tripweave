@@ -234,6 +234,83 @@ stops = RouteStops("Your route, stop by stop", [kandy, nuwara])`;
   });
 });
 
+describe("journal blocks", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const journal = `root = PlanningCanvas("Four days of tea and temples in Kandy", [sights, food, board, when], "Kandy rewards slow mornings.", ["4 days"], "walk early, wander late", "Kandy")
+h1 = Highlight("Temple of the Tooth, Kandy", "Lakeside", "The relic temple at dusk.")
+h2 = Highlight("Ella, Sri Lanka", "Hill country", "Ridges and tea.")
+sights = Highlights("Do not miss", [h1, h2])
+food = LocalFlavours("Taste of Kandy", ["Kottu roti", "Hoppers"], "try them hot")
+d1 = BoardDay("Day 1", ["Kandy, Sri Lanka", "Nuwara Eliya, Sri Lanka"], "Lake and tea")
+board = DayBoard("Four days", [d1], "easy pace")
+c1 = Choice("Perahera season", "August", "the great procession", "Plan it for the August festival.")
+c2 = Choice("Dry months", "January to April")
+when = Choices("When would you like to go?", [c1, c2], "Pick your own dates")`;
+
+  it("highlights the headline and shows the handwritten note", async () => {
+    stubPlaces();
+    renderProgram(journal);
+    const heading = await screen.findByRole("heading", { name: "Four days of tea and temples in Kandy" });
+    expect(heading.querySelector("mark")).toHaveTextContent("Kandy");
+    expect(screen.getByText("walk early, wander late")).toBeInTheDocument();
+  });
+
+  it("opens a postcard's story and plans a visit from it", async () => {
+    stubPlaces();
+    const onAction = renderProgram(journal);
+    const postcard = await screen.findByRole("button", { name: /Temple of the Tooth/ });
+    fireEvent.click(postcard);
+    expect(postcard).toHaveAttribute("aria-pressed", "true");
+    const story = screen.getByRole("region", { name: "About Temple of the Tooth" });
+    await waitFor(() => expect(within(story).getByText(/temple of the tooth, kandy is a hill-country town/i)).toBeInTheDocument());
+    fireEvent.click(within(story).getByRole("button", { name: "Plan a visit" }));
+    expect(onAction).toHaveBeenLastCalledWith(expect.objectContaining({ humanFriendlyMessage: expect.stringContaining("Plan a visit to Temple of the Tooth, Kandy") }));
+  });
+
+  it("saves local flavours and asks where to find them", async () => {
+    stubPlaces();
+    const onAction = renderProgram(journal);
+    fireEvent.click(await screen.findByRole("button", { name: "Save Kottu roti to try" }));
+    expect(screen.getByRole("button", { name: "Remove Kottu roti from the list" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: /Find it/ }));
+    expect(onAction).toHaveBeenLastCalledWith(expect.objectContaining({ humanFriendlyMessage: expect.stringContaining("Where can we try Kottu roti") }));
+  });
+
+  it("shows each day's places with times of day and maps the day on request", async () => {
+    stubPlaces();
+    const onAction = renderProgram(journal);
+    expect(await screen.findByText("Morning")).toBeInTheDocument();
+    expect(screen.getByText("Afternoon")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Nuwara Eliya/ }));
+    await waitFor(() => expect(screen.getByText("nuwara eliya, sri lanka is a hill-country town.")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /Map this day/ }));
+    expect(onAction).toHaveBeenLastCalledWith(expect.objectContaining({ humanFriendlyMessage: expect.stringContaining("Show Day 1 on a map") }));
+  });
+
+  it("sends the picked choice as the next message and locks the other options", async () => {
+    stubPlaces();
+    const onAction = renderProgram(journal);
+    const perahera = await screen.findByRole("button", { name: /Perahera season/ });
+    fireEvent.click(perahera);
+    expect(onAction).toHaveBeenLastCalledWith(expect.objectContaining({ humanFriendlyMessage: "Plan it for the August festival." }));
+    expect(perahera).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Dry months/ })).toBeDisabled();
+  });
+
+  it("sends a free-text answer from the custom option", async () => {
+    stubPlaces();
+    const onAction = renderProgram(journal);
+    fireEvent.click(await screen.findByRole("button", { name: /Pick your own dates/ }));
+    fireEvent.change(screen.getByLabelText("Pick your own dates"), { target: { value: "the first week of March" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(onAction).toHaveBeenLastCalledWith(expect.objectContaining({ humanFriendlyMessage: "When would you like to go? the first week of March" }));
+  });
+});
+
 describe("PlaceMap full screen", () => {
   afterEach(() => {
     cleanup();

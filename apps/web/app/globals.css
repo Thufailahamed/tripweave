@@ -699,6 +699,23 @@ html[data-theme="dark"] .tw-trip {
 .tw-trip .tw-trip-display {
   line-height: 1;
 }
+.tw-trip .tw-hand {
+  font-family: var(--font-caveat), "Bradley Hand", cursive;
+  color: var(--accent);
+  font-size: 1.3rem;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+.tw-trip .tw-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.19em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
 .tw-trip h3.font-display {
   font-size: 1.2rem;
   line-height: 1.12;
@@ -727,6 +744,7 @@ html[data-theme="dark"] .tw-trip {
   --pl-sage: #5c7050;
   --pl-sage-soft: #e9eee1;
   --pl-gold: #a2793d;
+  --pl-marker: rgba(250, 214, 120, 0.55);
   color: var(--pl-ink);
   background:
     radial-gradient(120% 90% at 100% 0%, color-mix(in oklab, var(--pl-accent) 7%, transparent), transparent 55%),
@@ -751,6 +769,7 @@ html[data-theme="dark"] .tw-planner,
   --pl-sage: #9db18b;
   --pl-sage-soft: #22302a;
   --pl-gold: #d3a96b;
+  --pl-marker: rgba(211, 169, 107, 0.32);
 }
 .tw-planner .pl-display {
   font-family: var(--font-instrument), Georgia, "Times New Roman", serif;
@@ -924,7 +943,131 @@ html[data-theme="dark"] .tw-planner .pl-card,
   background-size: 220% 100%;
   animation: pl-sheen 1.4s linear infinite;
 }
+/* A generated reply set straight onto the conversation's paper: tokens only, no frame of its own. */
+.tw-planner.pl-flat {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+.tw-planner .pl-deck {
+  font-family: var(--font-instrument), Georgia, "Times New Roman", serif;
+  font-size: 1.45rem;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: color-mix(in oklab, var(--pl-ink) 88%, var(--pl-muted));
+  text-wrap: pretty;
+}
+.tw-planner .pl-hand-muted {
+  color: var(--pl-muted);
+  font-size: 1.15rem;
+}
+/* Highlighter stroke behind one headline word. */
+.tw-planner .pl-mark {
+  color: inherit;
+  padding: 0 0.12em;
+  margin: 0 -0.04em;
+  border-radius: 0.12em;
+  background: linear-gradient(104deg, transparent 0.6%, var(--pl-marker) 2.4%, color-mix(in oklab, var(--pl-marker) 80%, transparent) 96%, transparent 99%);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+/* Polaroid postcards: a white frame that leans, straightens and lifts on hover. */
+.tw-planner .pl-postcard {
+  transition: transform 0.45s var(--ease-out);
+}
+.tw-planner .pl-postcard-frame {
+  display: block;
+  padding: 7px;
+  border-radius: 14px;
+  background: var(--pl-surface);
+  border: 1px solid var(--pl-line);
+  box-shadow: 0 22px 40px -30px rgba(30, 22, 12, 0.75);
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform 0.45s var(--ease-out), box-shadow 0.45s var(--ease-out), border-color 0.3s ease;
+}
+.tw-planner .pl-postcard:hover .pl-postcard-frame,
+.tw-planner .pl-postcard:focus-visible .pl-postcard-frame,
+.tw-planner .pl-postcard-active .pl-postcard-frame {
+  transform: rotate(0deg) translateY(-4px);
+  box-shadow: 0 30px 50px -32px rgba(30, 22, 12, 0.85);
+}
+.tw-planner .pl-postcard-active .pl-postcard-frame {
+  border-color: var(--pl-accent);
+}
+.tw-planner .pl-choice {
+  border: 1px solid var(--pl-line);
+  border-radius: 18px;
+  background: var(--pl-surface);
+  padding: 16px 18px;
+  box-shadow: 0 16px 30px -28px rgba(30, 22, 12, 0.7);
+  transition: transform 0.3s var(--ease-out), border-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
+}
+.tw-planner .pl-choice:not(:disabled):hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklab, var(--pl-ink) 30%, var(--pl-line));
+  box-shadow: 0 22px 36px -28px rgba(30, 22, 12, 0.8);
+}
+.tw-planner .pl-choice:disabled {
+  cursor: default;
+}
+.tw-planner .pl-choice-picked {
+  border-color: var(--pl-accent);
+  background: color-mix(in oklab, var(--pl-accent-soft) 55%, var(--pl-surface));
+}
+.tw-planner .pl-board {
+  border-radius: 22px;
+  background: color-mix(in oklab, var(--pl-surface-2) 80%, var(--pl-line));
+  border: 1px solid color-mix(in oklab, var(--pl-line) 70%, transparent);
+}
+.tw-planner .pl-tile {
+  border: 1px solid var(--pl-line);
+  border-radius: 18px;
+  background: var(--pl-surface);
+  box-shadow: 0 16px 30px -28px rgba(30, 22, 12, 0.7);
+  transition: transform 0.3s var(--ease-out), border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.tw-planner .pl-tile:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklab, var(--pl-ink) 26%, var(--pl-line));
+  box-shadow: 0 24px 38px -28px rgba(30, 22, 12, 0.8);
+}
+.tw-planner .pl-tile:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* The reader's question, echoed in handwriting above each reply. */
+.tw-planner .pl-echo {
+  font-family: var(--font-caveat), "Bradley Hand", cursive;
+  font-size: 2rem;
+  line-height: 1.05;
+  color: var(--pl-ink);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+@keyframes pl-scribble {
+  0% { stroke-dashoffset: 120; }
+  60% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -120; }
+}
+.tw-planner .pl-scribble path {
+  stroke-dasharray: 120;
+  animation: pl-scribble 1.8s ease-in-out infinite;
+}
+.tw-planner .pl-composer {
+  border: 1px solid var(--pl-line);
+  background: color-mix(in oklab, var(--pl-surface) 94%, transparent);
+  box-shadow: 0 1px 0 color-mix(in oklab, #fff 50%, transparent) inset, 0 24px 48px -28px rgba(30, 22, 12, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.tw-planner .pl-composer:focus-within {
+  border-color: color-mix(in oklab, var(--pl-accent) 45%, var(--pl-line));
+}
 @media (prefers-reduced-motion: reduce) {
+  .tw-planner .pl-scribble path,
+  .tw-planner .pl-postcard-frame,
   .tw-planner .pl-rise,
   .tw-planner .pl-bar,
   .tw-planner .pl-sheen,

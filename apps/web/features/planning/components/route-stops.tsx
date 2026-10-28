@@ -66,8 +66,11 @@ export const RouteStops = defineComponent({
   component: function RouteStopsView({ props, renderNode }) {
     return (
       <section aria-label={props.title} className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="pl-eyebrow">{props.title}</p>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div className="min-w-0">
+            <p className="pl-eyebrow">{props.title}</p>
+            {props.note ? <p className="pl-hand mt-1">{props.note}</p> : null}
+          </div>
           <span className="text-[11px] text-[var(--pl-muted)]">
             {props.stops.length} stops
           </span>

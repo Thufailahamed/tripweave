@@ -34,6 +34,13 @@ export const PLANNING_COMPONENT_NAMES = [
   "Callout",
   "ComparisonTable",
   "FollowUps",
+  "Highlight",
+  "Highlights",
+  "LocalFlavours",
+  "Choice",
+  "Choices",
+  "BoardDay",
+  "DayBoard",
 ] as const;
 
 export type PlanningComponentName = (typeof PLANNING_COMPONENT_NAMES)[number];
@@ -252,11 +259,12 @@ const RouteStop = define(
 const RouteStopsSchema = z.object({
   title: safeText(100),
   stops: z.array(RouteStop.ref).min(2).max(10),
+  note: optionalSafeText(140),
 });
 export { RouteStopsSchema };
 const RouteStops = define(
   "RouteStops",
-  "An ordered route of two to ten RouteStop blocks, shown as a stop-by-stop timeline. Use it for a day's route, a walking tour or the order to visit places. Pass the RouteStop blocks as stops, in visiting order.",
+  "An ordered route of two to ten RouteStop blocks, shown as a stop-by-stop timeline, with an optional one-line note under the title. Use it for a day's route, a journey between places, a walking tour or the order to visit places. Pass the RouteStop blocks as stops, in visiting order.",
   RouteStopsSchema,
 );
 
@@ -329,6 +337,90 @@ const FollowUps = define(
   FollowUpsSchema,
 );
 
+const HighlightSchema = z.object({
+  name: safeText(80),
+  area: optionalSafeText(60),
+  note: optionalSafeText(200),
+});
+export { HighlightSchema };
+const Highlight = define(
+  "Highlight",
+  "One must-see place for Highlights: its name with region (for example 'Temple of the Tooth, Kandy'), an optional area such as 'Old town' and a one-line note on why it is worth it. The app supplies the photograph.",
+  HighlightSchema,
+);
+
+const HighlightsSchema = z.object({
+  title: optionalSafeText(80),
+  items: z.array(Highlight.ref).min(2).max(6),
+});
+export { HighlightsSchema };
+const Highlights = define(
+  "Highlights",
+  "Large photographic postcards of the two to six must-see places that answer the question, each with an area and a one-line note. Readers open a postcard for its story and can ask to plan a visit. Use it near the top of a destination or 'what to see' answer.",
+  HighlightsSchema,
+);
+
+const LocalFlavoursSchema = z.object({
+  title: safeText(80),
+  items: z.array(safeText(60)).min(2).max(6),
+  note: optionalSafeText(120),
+});
+export { LocalFlavoursSchema };
+const LocalFlavours = define(
+  "LocalFlavours",
+  "A row of photographed local dishes, drinks or crafts to try, for example ['Kottu roti', 'Hoppers', 'Ceylon tea']. Pass the item names only; the app finds a photograph for each. The optional note is a short handwritten aside. Never prices.",
+  LocalFlavoursSchema,
+);
+
+const ChoiceSchema = z.object({
+  label: safeText(60),
+  detail: optionalSafeText(60),
+  note: optionalSafeText(140),
+  reply: optionalSafeText(240),
+});
+export { ChoiceSchema };
+const Choice = define(
+  "Choice",
+  "One option inside Choices: a short label such as 'Autumn maples', an optional detail line such as 'Late November' and a short note. reply is the message sent for the reader when they pick it, for example 'Plan it for late November, for the autumn colours.'",
+  ChoiceSchema,
+);
+
+const ChoicesSchema = z.object({
+  question: safeText(120),
+  options: z.array(Choice.ref).min(2).max(6),
+  custom: optionalSafeText(60),
+});
+export { ChoicesSchema };
+const Choices = define(
+  "Choices",
+  "An interactive question with two to six Choice cards. Picking a card sends its reply as the reader's next message, so the plan continues from their choice. custom is an optional label for a free-text option such as 'Pick your own dates'. Use it when the best next step depends on a preference: when to go, pace, style, length or which region.",
+  ChoicesSchema,
+);
+
+const BoardDaySchema = z.object({
+  label: safeText(40),
+  places: z.array(safeText(80)).min(1).max(4),
+  title: optionalSafeText(80),
+});
+export { BoardDaySchema };
+const BoardDay = define(
+  "BoardDay",
+  "One day inside DayBoard: a label such as 'Day 1' or 'Day 2 · Sat', one to four place names with regions in visiting order (shown as morning, afternoon and evening photographs) and an optional short title.",
+  BoardDaySchema,
+);
+
+const DayBoardSchema = z.object({
+  title: safeText(80),
+  days: z.array(BoardDay.ref).min(1).max(7),
+  note: optionalSafeText(140),
+});
+export { DayBoardSchema };
+const DayBoard = define(
+  "DayBoard",
+  "A photographic day-by-day itinerary board of one to seven BoardDay blocks. Each day shows its places as photo tiles; readers can reorder ideas by asking. The optional note is a short handwritten aside. Use it for multi-day plans in a destination.",
+  DayBoardSchema,
+);
+
 const PlanningCanvasSchema = z.object({
   title: safeText(80),
   blocks: z.array(
@@ -358,15 +450,21 @@ const PlanningCanvasSchema = z.object({
       Callout.ref,
       ComparisonTable.ref,
       FollowUps.ref,
+      Highlights.ref,
+      LocalFlavours.ref,
+      Choices.ref,
+      DayBoard.ref,
     ]),
   ),
   subtitle: optionalSafeText(300),
   chips: z.array(safeText(40)).max(5).optional(),
+  note: optionalSafeText(80),
+  highlight: optionalSafeText(40),
 });
 export { PlanningCanvasSchema };
 const PlanningCanvas = define(
   "PlanningCanvas",
-  "Top-level container for one planning reply. Put the most useful block first. The title and subtitle are short plain-text framing, not a place for prices or claims.",
+  "Top-level container for one planning reply. The title is an evocative headline (for example 'Four days of tea, temples and trains in Kandy'); the subtitle is one sentence that answers the question. chips are up to five short header labels. note is a short handwritten aside (for example 'walk early, wander late'). highlight is one word or place name from the title to mark with a highlighter. Put the most useful block first. Never prices or claims.",
   PlanningCanvasSchema,
 );
 
@@ -398,6 +496,13 @@ export const planningComponents = [
   Callout,
   ComparisonTable,
   FollowUps,
+  Highlight,
+  Highlights,
+  LocalFlavours,
+  Choice,
+  Choices,
+  BoardDay,
+  DayBoard,
 ];
 
 export const planningComponentGroups = [
@@ -426,8 +531,11 @@ export const planningComponentGroups = [
   },
   {
     name: "Travel guide",
-    components: ["Lead", "PlaceGallery", "PlaceCard", "PlaceMap", "RouteStops", "RouteStop", "DayPlan", "TipList", "KeyFacts", "Callout", "ComparisonTable", "FollowUps"],
+    components: ["Lead", "Highlights", "Highlight", "LocalFlavours", "Choices", "Choice", "DayBoard", "BoardDay", "PlaceGallery", "PlaceCard", "PlaceMap", "RouteStops", "RouteStop", "DayPlan", "TipList", "KeyFacts", "Callout", "ComparisonTable", "FollowUps"],
     notes: [
+      "Compose like a travel magazine: an evocative PlanningCanvas title with a highlight word and a handwritten note, then photographs first. Highlights for the must-see places, LocalFlavours for food and drink, DayBoard for a multi-day plan, Choices when the next step depends on the reader's preference.",
+      "Highlights holds two to six Highlight blocks; DayBoard holds one to seven BoardDay blocks; Choices holds two to six Choice blocks. Define each child block on its own line and pass the references in the list.",
+      "Choices drive the conversation: give each Choice a reply written in the reader's voice so picking it continues the plan.",
       "Use these for general travel questions that do not need the saved trip: destinations, seasons, things to see, route and day ideas, packing, etiquette and planning advice.",
       "Open with Lead, then choose two or three visual blocks such as PlaceGallery, DayPlan or TipList. Finish with FollowUps.",
       "PlaceCard and PlaceGallery take a place name with its region only; the app supplies the photograph, so never pass a URL or image.",
@@ -455,7 +563,7 @@ export const planningComponentGroups = [
  * checked on its framing fields only: its block references are validated by the parser.
  */
 export const PLANNING_PROP_SCHEMAS = {
-  PlanningCanvas: PlanningCanvasSchema.pick({ title: true, subtitle: true, chips: true }),
+  PlanningCanvas: PlanningCanvasSchema.pick({ title: true, subtitle: true, chips: true, note: true, highlight: true }),
   TripHero: TripHeroSchema,
   TripRequirementSummary: TripRequirementSummarySchema,
   ClarificationForm: ClarificationFormSchema,
@@ -482,6 +590,13 @@ export const PLANNING_PROP_SCHEMAS = {
   Callout: CalloutSchema,
   ComparisonTable: ComparisonTableSchema,
   FollowUps: FollowUpsSchema,
+  Highlight: HighlightSchema,
+  Highlights: HighlightsSchema.extend({ items: z.array(z.unknown()).min(2).max(6) }),
+  LocalFlavours: LocalFlavoursSchema,
+  Choice: ChoiceSchema,
+  Choices: ChoicesSchema.extend({ options: z.array(z.unknown()).min(2).max(6) }),
+  BoardDay: BoardDaySchema,
+  DayBoard: DayBoardSchema.extend({ days: z.array(z.unknown()).min(1).max(7) }),
 } as const satisfies Record<PlanningComponentName, z.ZodType>;
 
 type PlanningLibrary = ReturnType<typeof createLibrary>;

@@ -70,12 +70,41 @@ describe("PlanningPanel", () => {
       }),
     );
     renderPanel();
-    expect(await screen.findByText("What shall we plan next?")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "What shall we plan next?" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Summarise the trip" }));
     expect(await screen.findByText("Trip overview")).toBeInTheDocument();
     expect(await screen.findByText("What we know")).toBeInTheDocument();
     expect(screen.getByText("Summarise the current trip requirements.")).toBeInTheDocument();
     expect(postBody).toMatchObject({ message: "Summarise the current trip requirements.", history: [] });
+  });
+
+  it("retries once when the connection drops mid-stream, then explains a second drop", async () => {
+    const user = userEvent.setup();
+    let posts = 0;
+    let dropEveryTime = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if ((init?.method ?? "GET") === "GET") return jsonResponse({ data: context });
+        posts += 1;
+        if (dropEveryTime || posts === 1) throw new TypeError("network error");
+        return sseResponse([
+          { event: "meta", data: { ...context, fallbackAvailable: true } },
+          { event: "delta", data: { text: summaryProgram } },
+          { event: "done", data: done(summaryProgram) },
+        ]);
+      }),
+    );
+    renderPanel();
+    await screen.findByRole("heading", { name: "What shall we plan next?" });
+    await user.click(screen.getByRole("button", { name: "Summarise the trip" }));
+    expect(await screen.findByText("Trip overview", {}, { timeout: 4_000 })).toBeInTheDocument();
+    expect(posts).toBe(2);
+
+    dropEveryTime = true;
+    await user.type(screen.getByLabelText("Message the planning assistant"), "Again{Enter}");
+    expect((await screen.findAllByText(/connection to the planner dropped/i, {}, { timeout: 4_000 })).length).toBeGreaterThan(0);
+    expect(posts).toBe(4);
   });
 
   it("switches to the standard view when generation is unavailable", async () => {
@@ -91,7 +120,7 @@ describe("PlanningPanel", () => {
       }),
     );
     renderPanel();
-    await screen.findByText("What shall we plan next?");
+    await screen.findByRole("heading", { name: "What shall we plan next?" });
     await user.click(screen.getByRole("button", { name: "Summarise the trip" }));
     expect(await screen.findByText(/did not pass validation/i)).toBeInTheDocument();
     expect(screen.getAllByText(/best value/i).length).toBeGreaterThan(0);
@@ -111,7 +140,7 @@ describe("PlanningPanel", () => {
       }),
     );
     renderPanel();
-    await screen.findByText("What shall we plan next?");
+    await screen.findByRole("heading", { name: "What shall we plan next?" });
     await user.click(screen.getByRole("button", { name: "Summarise the trip" }));
     const open = await screen.findByRole("button", { name: /Open packages/i });
     await user.click(open);
@@ -128,7 +157,7 @@ describe("PlanningPanel", () => {
       }),
     );
     renderPanel();
-    await screen.findByText("What shall we plan next?");
+    await screen.findByRole("heading", { name: "What shall we plan next?" });
     await user.click(screen.getByRole("button", { name: "Summarise the trip" }));
     expect(await screen.findByText(/could not be generated or rendered/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Try again/i })).toBeInTheDocument();
@@ -148,7 +177,7 @@ describe("PlanningPanel", () => {
       }),
     );
     renderPanel();
-    await screen.findByText("What shall we plan next?");
+    await screen.findByRole("heading", { name: "What shall we plan next?" });
     await user.click(screen.getByRole("button", { name: "Summarise the trip" }));
     expect(await screen.findByText(/stream ended before the interface was complete/i)).toBeInTheDocument();
     expect(await screen.findByText(/could not be generated or rendered/i)).toBeInTheDocument();
@@ -167,7 +196,7 @@ describe("PlanningPanel", () => {
       }),
     );
     renderPanel();
-    await screen.findByText("What shall we plan next?");
+    await screen.findByRole("heading", { name: "What shall we plan next?" });
     await user.click(screen.getByRole("button", { name: "Summarise the trip" }));
     await screen.findByText("Trip overview");
     await user.click(screen.getByRole("button", { name: "Standard view" }));

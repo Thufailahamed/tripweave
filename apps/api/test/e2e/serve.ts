@@ -71,12 +71,16 @@ const FIXTURES: Record<string, PlaceFixture> = {
   },
 };
 
+/** Set E2E_LIVE_PLACES=1 to look up places without a fixture on the real Wikipedia, for a visual review. */
+const LIVE_PLACES = process.env.E2E_LIVE_PLACES === "1";
+
 /** Serves Wikipedia search responses from the fixture table; every other request goes to the network. */
 const fixtureFetch: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
   if (url.hostname !== "en.wikipedia.org") return fetch(input, init);
   const term = (url.searchParams.get("gsrsearch") ?? "").trim().toLowerCase();
   const fixture = FIXTURES[term];
+  if (!fixture && LIVE_PLACES && !term.startsWith("atlantis")) return fetch(input, init);
   const pages = fixture
     ? [
         {
@@ -115,6 +119,23 @@ map = TripMap("${itinerary}")
 timeline = DestinationTimeline("${itinerary}")
 summary = TripRequirementSummary("${trip}")
 next = QuickActions()`;
+  }
+  if (/things to see|see and do|what to eat|days in kandy/.test(text)) {
+    return `root = PlanningCanvas("Four days of tea, temples and trains in Kandy", [sights, board, food, when, next], "Kandy rewards slow mornings by the lake and long afternoons in the hills.", ["4 days", "Easy pace", "Hill country"], "walk early, wander late", "Kandy")
+h1 = Highlight("Temple of the Tooth, Kandy", "Lakeside", "The relic temple glows at the evening puja.")
+h2 = Highlight("Sigiriya, Sri Lanka", "Cultural Triangle", "A rock fortress worth the early climb.")
+h3 = Highlight("Nine Arch Bridge, Ella", "Demodara", "Time it for a passing train.")
+sights = Highlights("Do not miss", [h1, h2, h3])
+d1 = BoardDay("Day 1", ["Kandy, Sri Lanka", "Temple of the Tooth, Kandy"], "Lake and temple")
+d2 = BoardDay("Day 2", ["Sigiriya, Sri Lanka"], "The rock")
+d3 = BoardDay("Day 3", ["Nuwara Eliya, Sri Lanka", "Ella, Sri Lanka", "Little Adam's Peak, Sri Lanka"], "Into the hills")
+board = DayBoard("Four days around Kandy", [d1, d2, d3], "mapped your stops into a relaxed loop")
+food = LocalFlavours("Kandy specialties", ["Kottu roti", "Hoppers", "Ceylon tea"], "hoppers are best at breakfast")
+c1 = Choice("Perahera season", "July to August", "the great procession lights up the town", "Plan it for the Perahera festival in August.")
+c2 = Choice("Cool and dry", "January to March", "clear mornings in the hills", "Plan it for February, when it is cool and dry.")
+c3 = Choice("Quiet months", "May to June", "fewer crowds and green hills", "Plan it for June, when it is quiet.")
+when = Choices("When would you like to go?", [c1, c2, c3], "Pick your own dates")
+next = FollowUps("keep planning", ["Find hotels near the lake in Kandy", "Where should we eat near the temple?", "Add a tea factory visit"])`;
   }
   if (/where|map|route|near|how far|between|get from/.test(text)) {
     return `root = PlanningCanvas("Kandy to Ella by the hills", [lead, route, stops, days, next], "Locations come from public coordinates; travel times are estimates.", ["Walking + transit", "Hill country"])
@@ -174,7 +195,7 @@ const scriptedModel: LlmClient = {
   },
 };
 
-export const harness = new Harness({ buildLlm: () => scriptedModel, fetch: fixtureFetch }, { APP_BASE_URL: "http://localhost:3000", COOKIE_SECURE: "false" });
+export const harness = new Harness({ buildLlm: () => scriptedModel, fetch: fixtureFetch }, { APP_BASE_URL: process.env.E2E_APP_BASE_URL ?? "http://localhost:3000", COOKIE_SECURE: "false" });
 
 const server = createServer(async (req, res) => {
   const chunks: Buffer[] = [];

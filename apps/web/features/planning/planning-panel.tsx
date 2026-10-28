@@ -3,11 +3,10 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Renderer } from "@openuidev/react-lang";
-import { ArrowUp, MessageSquare, RefreshCw, Sparkles, Square } from "lucide-react";
+import { ArrowUp, Plus, RefreshCw, Sparkles, Square } from "lucide-react";
 import { toast } from "sonner";
 import type { PlanningSnapshot, PlanningStarter } from "@tripweave/planning-contract";
-import { Alert, Badge, Card, CardContent, ErrorState, LoadingBlock } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Alert, ErrorState, LoadingBlock } from "@/components/ui/card";
 import { ApiError, errorMessage } from "@/lib/api";
 import { tripKeys } from "@/features/trips/hooks";
 import { dateRange } from "@/lib/utils";
@@ -28,6 +27,13 @@ interface Turn {
   warnings: string[];
   errors: string[];
   standardView: boolean;
+}
+
+const CONNECTION_DROPPED = "The connection to the planner dropped before the reply finished. Try again in a moment.";
+
+/** fetch and stream reads reject with a TypeError ("network error", "Failed to fetch") when the connection drops. */
+function isConnectionDrop(error: unknown): boolean {
+  return error instanceof TypeError;
 }
 
 function newId(): string {
@@ -75,6 +81,13 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
 
   React.useEffect(() => () => abortRef.current?.abort(), []);
 
+  React.useLayoutEffect(() => {
+    const node = composerRef.current;
+    if (!node) return;
+    node.style.height = "auto";
+    node.style.height = `${Math.min(node.scrollHeight, 160)}px`;
+  }, [input]);
+
   const patchTurn = React.useCallback((id: string, patch: Partial<Turn>) => {
     setMessages((current) => current.map((message) => (message.id === id ? { ...message, ...patch, warnings: patch.warnings ?? message.warnings, errors: patch.errors ?? message.errors } : message)));
   }, []);
@@ -104,36 +117,45 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
       abortRef.current = controller;
       let doneReceived = false;
       try {
-        await streamPlanningTurn({
-          tripId,
-          message: text,
-          history,
-          signal: controller.signal,
-          onMeta: (meta) => {
-            setSnapshot(meta.snapshot);
-            setStarters(meta.starters);
-            setEngineAvailable(meta.engineAvailable);
-            patchTurn(assistantId, { snapshot: meta.snapshot });
-          },
-          onDelta: (chunk) => setMessages((current) => current.map((message) => (message.id === assistantId ? { ...message, content: message.content + chunk } : message))),
-          onReset: () => patchTurn(assistantId, { content: "", warnings: [], errors: [] }),
-          onDone: (done) => {
-            doneReceived = true;
-            patchTurn(assistantId, { content: done.program, status: "done", usedFallback: done.usedFallback, reason: done.reason, warnings: done.warnings ?? [] });
-          },
-        });
+        for (let attempt = 1; ; attempt += 1) {
+          try {
+            await streamPlanningTurn({
+              tripId,
+              message: text,
+              history,
+              signal: controller.signal,
+              onMeta: (meta) => {
+                setSnapshot(meta.snapshot);
+                setStarters(meta.starters);
+                setEngineAvailable(meta.engineAvailable);
+                patchTurn(assistantId, { snapshot: meta.snapshot });
+              },
+              onDelta: (chunk) => setMessages((current) => current.map((message) => (message.id === assistantId ? { ...message, content: message.content + chunk } : message))),
+              onReset: () => patchTurn(assistantId, { content: "", warnings: [], errors: [] }),
+              onDone: (done) => {
+                doneReceived = true;
+                patchTurn(assistantId, { content: done.program, status: "done", usedFallback: done.usedFallback, reason: done.reason, warnings: done.warnings ?? [] });
+              },
+            });
+            break;
+          } catch (error) {
+            // A dropped connection (the API restarting, a proxy or network blip) is retried once from
+            // scratch; HTTP errors, validation fallbacks and the reader's own Stop are not.
+            if (doneReceived || controller.signal.aborted || !isConnectionDrop(error) || attempt >= 2) throw error;
+            patchTurn(assistantId, { content: "", warnings: [], errors: [] });
+            await new Promise((resolve) => setTimeout(resolve, 1_500));
+            if (controller.signal.aborted) throw error;
+          }
+        }
         if (!doneReceived && !controller.signal.aborted) {
           patchTurn(assistantId, { status: "error", content: "", errors: ["The stream ended before the interface was complete. A standard view is shown."] });
         }
       } catch (error) {
         if (doneReceived) return;
         const aborted = (error as Error)?.name === "AbortError";
-        patchTurn(assistantId, {
-          status: "error",
-          errors: [aborted ? "Generation stopped." : errorMessage(error)],
-          content: "",
-        });
-        if (!aborted) setNotice({ tone: "danger", text: errorMessage(error) });
+        const message = aborted ? "Generation stopped." : isConnectionDrop(error) ? CONNECTION_DROPPED : errorMessage(error);
+        patchTurn(assistantId, { status: "error", errors: [message], content: "" });
+        if (!aborted) setNotice({ tone: "danger", text: message });
       } finally {
         abortRef.current = null;
         setStreaming(false);
@@ -221,179 +243,212 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
     [qc, router, send, snapshot, tripId],
   );
 
+  const topRef = React.useRef<HTMLElement | null>(null);
+  const newChat = React.useCallback(() => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setNotice(null);
+    setInput("");
+    topRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+  }, []);
+
   if (initial.isLoading && !snapshot) return <LoadingBlock label="Loading planning context" />;
   if (initial.isError && !snapshot) return <ErrorState error={initial.error} onRetry={() => initial.refetch()} title="Could not load the planning assistant" />;
 
   const visibleStarters = (starters.length > 0 ? starters : [{ label: "Summarise the trip", prompt: "Summarise the current trip requirements." }]).slice(0, 6);
+  const firstStop = snapshot?.itinerary?.stops[0]?.destination ?? null;
 
-  return (
-    <div className="flex flex-col gap-3">
-      {notice ? <Alert tone={notice.tone}>{notice.text}</Alert> : null}
-
-      <Card className="overflow-hidden">
-        <CardContent className="flex flex-col gap-4 p-4 pb-20 sm:p-5 sm:pb-20">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <span aria-hidden className="grid size-9 place-items-center rounded-full bg-accent-soft text-accent">
-                <Sparkles className="size-4" />
-              </span>
-              <div>
-                <h2 className="font-display text-[17px] font-semibold tracking-[-0.03em]">Planning assistant</h2>
-                <p className="text-[11px] text-muted-foreground">
-                  {snapshot ? `${snapshot.trip.title} · ${dateRange(snapshot.trip.arrivalDate, snapshot.trip.departureDate)}` : "Composing from your saved trip"}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge tone={engineAvailable ? "accent" : "neutral"}>{engineAvailable ? "AI-assisted" : "Standard summaries"}</Badge>
-              <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
-                <span aria-hidden className="size-1.5 rounded-full bg-success" /> Server-authoritative
-              </span>
-            </div>
-          </div>
-
-          <p role="status" aria-live="polite" className="sr-only">
-            {streaming ? "The assistant is composing a response." : messages.length > 0 ? "Response complete." : "Ready for a planning request."}
-          </p>
-
-          {messages.length === 0 && snapshot ? (
-            <PlannerWelcome snapshot={snapshot} starters={visibleStarters} disabled={!snapshot} onAsk={(prompt) => void send(prompt)} />
-          ) : null}
-
-          <div className="flex flex-col gap-5" aria-label="Planning conversation">
-            {messages.map((message) => {
-              if (message.role === "user") {
-                return (
-                  <div key={message.id} className="flex justify-end">
-                    <div className="max-w-[85%] rounded-2xl rounded-br-md border border-border bg-muted/45 px-4 py-2.5 text-[13px]">
-                      <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                    </div>
-                  </div>
-                );
-              }
-              const showFallback = message.usedFallback || message.standardView || (message.errors.length > 0 && !message.content);
-              return (
-                <div key={message.id} className="flex flex-col gap-2">
-                  {message.status === "streaming" && !message.content ? (
-                    <div role="status" className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-4">
-                      <span aria-hidden className="size-2 animate-pulse rounded-full bg-accent" />
-                      <span className="pl-hand" style={{ fontFamily: "var(--font-caveat), cursive", color: "var(--accent)", fontSize: "1.3rem" }}>
-                        composing your answer…
-                      </span>
-                    </div>
-                  ) : null}
-                  {message.usedFallback ? (
-                    <Alert tone="warning" title={message.reason === "invalid" ? "Generated interface rejected" : "AI generation unavailable"}>
-                      {message.warnings[0] ?? "A standard view of the same server data is shown below."}
-                    </Alert>
-                  ) : null}
-                  {message.errors.length > 0 && message.status !== "streaming" ? (
-                    <Alert tone="danger" title="This response could not be completed">
-                      <p>{message.errors[0]}</p>
-                    </Alert>
-                  ) : null}
-                  {showFallback && message.snapshot ? (
-                    <PlanningFallbackView snapshot={message.snapshot} reason={message.standardView ? "manual" : message.reason === "invalid" ? "invalid" : message.usedFallback ? "unavailable" : "error"} onRetry={retry} />
-                  ) : message.snapshot ? (
-                    <GeneratedInterfaceBoundary snapshot={message.snapshot}>
-                      <PlanningProvider snapshot={message.snapshot}>
-                        <Renderer
-                          library={library}
-                          response={message.content}
-                          isStreaming={message.status === "streaming"}
-                          publishObservability={false}
-                          onAction={(event) => void handleAction(event as { type: string; params: Record<string, unknown>; humanFriendlyMessage?: string })}
-                          onError={(errors) => {
-                            const relevant = errors.filter((error) => error.severity !== "warning").map((error) => `${error.code}: ${error.message}`);
-                            patchTurn(message.id, { errors: relevant.slice(0, 3) });
-                          }}
-                        />
-                      </PlanningProvider>
-                    </GeneratedInterfaceBoundary>
-                  ) : null}
-                  {message.status !== "streaming" && message.snapshot ? (
-                    <div className="flex flex-wrap items-center gap-2 px-1">
-                      <Button size="sm" variant="ghost" onClick={() => patchTurn(message.id, { standardView: !message.standardView })}>
-                        {message.standardView ? "Try generated view" : "Standard view"}
-                      </Button>
-                      {message.status === "error" ? (
-                        <Button size="sm" variant="outline" onClick={retry}>
-                          <RefreshCw /> Try again
-                        </Button>
-                      ) : null}
-                      {message.usedFallback && message.reason === "invalid" ? (
-                        <span className="text-[10px] text-muted-foreground">The server rejected malformed or unauthorised interface output before rendering it.</span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-            <div ref={scrollRef} />
-          </div>
-
-          {notice?.tone === "danger" && messages.length === 0 ? (
-            <Button variant="outline" onClick={() => initial.refetch()}>
-              Reload planning context
-            </Button>
-          ) : null}
-
-        </CardContent>
-      </Card>
-      <div className={messages.length > 0 ? "sticky bottom-3 z-20 flex flex-col gap-1.5" : "flex flex-col gap-1.5"}>
-          <form
-            className="rounded-2xl border border-border bg-card/95 p-2 shadow-[0_18px_40px_-24px_rgba(20,26,45,0.55)] backdrop-blur-md"
-            onSubmit={(event) => {
+  const composer = (
+    <div className="flex flex-col gap-1.5">
+      <form
+        className="pl-composer flex items-end gap-2 rounded-[26px] py-2 pl-5 pr-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void send(input);
+        }}
+      >
+        <label htmlFor="planning-message" className="sr-only">
+          Message the planning assistant
+        </label>
+        <textarea
+          ref={composerRef}
+          id="planning-message"
+          value={input}
+          maxLength={4_000}
+          rows={1}
+          disabled={streaming || !snapshot}
+          placeholder={snapshot ? `Ask anything about ${firstStop ?? "this trip"}…` : "Planning context is loading…"}
+          onChange={(event) => setInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
               void send(input);
-            }}
+            }
+          }}
+          className="max-h-40 min-h-[40px] flex-1 resize-none border-0 bg-transparent py-2.5 text-[14px] leading-snug outline-none placeholder:text-[var(--pl-muted)] disabled:opacity-60"
+        />
+        {streaming ? (
+          <button type="button" onClick={stop} aria-label="Stop generating" className="grid size-10 shrink-0 place-items-center rounded-full border border-[var(--pl-line)] bg-[var(--pl-surface)] text-[var(--pl-ink)] transition hover:border-[var(--pl-ink)]">
+            <Square className="size-3.5 fill-current" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            aria-label="Send message"
+            disabled={!snapshot || input.trim().length === 0 || streaming}
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--pl-accent)] text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-35"
           >
-            <label htmlFor="planning-message" className="sr-only">
-              Message the planning assistant
-            </label>
-            <textarea
-              ref={composerRef}
-              id="planning-message"
-              value={input}
-              maxLength={4_000}
-              rows={2}
-              disabled={streaming || !snapshot}
-              placeholder={snapshot ? "Ask about this trip, or anything about travel: places, seasons, routes, packing…" : "Planning context is loading…"}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                  event.preventDefault();
-                  void send(input);
-                }
-              }}
-              className="min-h-[52px] w-full resize-none border-0 bg-transparent px-3 py-2 text-[13px] outline-none placeholder:text-muted-foreground disabled:opacity-60"
-            />
-            <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-1">
-              <p className="text-[10px] text-muted-foreground">Enter sends · Shift+Enter adds a line · {input.length}/4000</p>
-              <div className="flex items-center gap-2">
-                {streaming ? (
-                  <Button type="button" variant="outline" size="sm" onClick={stop} aria-label="Stop generating">
-                    <Square /> Stop
-                  </Button>
-                ) : null}
-                <button
-                  type="submit"
-                  aria-label="Send message"
-                  disabled={!snapshot || input.trim().length === 0 || streaming}
-                  className="grid size-9 place-items-center rounded-full bg-accent text-accent-foreground transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ArrowUp className="size-4" />
-                </button>
-              </div>
-            </div>
-          </form>
-          <p className="flex items-center gap-1.5 px-1 text-[10px] text-muted-foreground">
-            <MessageSquare className="size-3" aria-hidden /> Each reply is composed for your question from a fixed set of blocks and checked before it appears. Trip prices and availability always come from the saved trip.
-          </p>
-      </div>
-      {!engineAvailable ? (
-        <p className="text-xs text-muted-foreground">AI generation is not configured for this organisation. Requests still work and return a readable summary built from the saved trip; general travel questions need AI.</p>
+            <ArrowUp className="size-4" />
+          </button>
+        )}
+      </form>
+      {messages.length === 0 ? (
+        <p className="px-5 text-center text-[10px] text-[var(--pl-muted)]">
+          Ask about this trip or travel anywhere: places, seasons, food, routes, packing. Trip prices and availability always come from the saved trip.
+        </p>
       ) : null}
+    </div>
+  );
+
+  return (
+    <section ref={topRef} aria-label="AI planner" className="tw-planner pl-flat mx-auto flex w-full max-w-[880px] flex-col gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--pl-accent-soft)] text-[var(--pl-accent)]">
+            <Sparkles className="size-4" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-[13px] font-semibold leading-tight">Planning assistant</h2>
+            <p className="truncate text-[11px] text-[var(--pl-muted)]">
+              {snapshot ? `${snapshot.trip.title} · ${dateRange(snapshot.trip.arrivalDate, snapshot.trip.departureDate)}` : "Composing from your saved trip"}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="pl-chip" title={engineAvailable ? "Replies are composed by AI and checked by the server" : "AI generation is not configured"}>
+            <span aria-hidden className={engineAvailable ? "size-1.5 rounded-full bg-[var(--pl-sage)]" : "size-1.5 rounded-full bg-[var(--pl-muted)]"} />
+            {engineAvailable ? "AI-assisted" : "Standard summaries"}
+          </span>
+          {messages.length > 0 ? (
+            <button type="button" className="pl-btn" onClick={newChat}>
+              <Plus className="size-3.5" aria-hidden /> New chat
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {notice ? <Alert tone={notice.tone}>{notice.text}</Alert> : null}
+
+      <p role="status" aria-live="polite" className="sr-only">
+        {streaming ? "The assistant is composing a response." : messages.length > 0 ? "Response complete." : "Ready for a planning request."}
+      </p>
+
+      {messages.length === 0 && snapshot ? (
+        <PlannerWelcome snapshot={snapshot} starters={visibleStarters} disabled={!snapshot} onAsk={(prompt) => void send(prompt)} composer={composer} />
+      ) : null}
+
+      <div className="flex flex-col gap-12" aria-label="Planning conversation">
+        {messages.map((message) => {
+          if (message.role === "user") {
+            return (
+              <div key={message.id} className="pl-rise -mb-6 max-w-[34rem]">
+                <p className="sr-only">You asked:</p>
+                <p className="pl-echo whitespace-pre-wrap">{message.content}</p>
+              </div>
+            );
+          }
+          const showFallback = message.usedFallback || message.standardView || (message.errors.length > 0 && !message.content);
+          return (
+            <div key={message.id} className="flex flex-col gap-3">
+              {message.status === "streaming" && !message.content ? <ComposingPlaceholder /> : null}
+              {message.usedFallback ? (
+                <Alert tone="warning" title={message.reason === "invalid" ? "Generated interface rejected" : "AI generation unavailable"}>
+                  {message.warnings[0] ?? "A standard view of the same server data is shown below."}
+                </Alert>
+              ) : null}
+              {message.errors.length > 0 && message.status !== "streaming" ? (
+                <Alert tone="danger" title="This response could not be completed">
+                  <p>{message.errors[0]}</p>
+                </Alert>
+              ) : null}
+              {showFallback && message.snapshot ? (
+                <PlanningFallbackView snapshot={message.snapshot} reason={message.standardView ? "manual" : message.reason === "invalid" ? "invalid" : message.usedFallback ? "unavailable" : "error"} onRetry={retry} />
+              ) : message.snapshot ? (
+                <GeneratedInterfaceBoundary snapshot={message.snapshot}>
+                  <PlanningProvider snapshot={message.snapshot}>
+                    <Renderer
+                      library={library}
+                      response={message.content}
+                      isStreaming={message.status === "streaming"}
+                      publishObservability={false}
+                      onAction={(event) => void handleAction(event as { type: string; params: Record<string, unknown>; humanFriendlyMessage?: string })}
+                      onError={(errors) => {
+                        const relevant = errors.filter((error) => error.severity !== "warning" && error.code !== "excess-args").map((error) => `${error.code}: ${error.message}`);
+                        patchTurn(message.id, { errors: relevant.slice(0, 3) });
+                      }}
+                    />
+                  </PlanningProvider>
+                </GeneratedInterfaceBoundary>
+              ) : null}
+              {message.status === "streaming" && message.content ? (
+                <p className="pl-hand pl-hand-muted flex items-center gap-2" aria-hidden>
+                  <span className="size-1.5 animate-pulse rounded-full bg-[var(--pl-accent)]" /> still composing…
+                </p>
+              ) : null}
+              {message.status !== "streaming" && message.snapshot ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button type="button" className="pl-btn h-8 border-transparent bg-transparent px-3 shadow-none" onClick={() => patchTurn(message.id, { standardView: !message.standardView })}>
+                    {message.standardView ? "Try generated view" : "Standard view"}
+                  </button>
+                  {message.status === "error" ? (
+                    <button type="button" className="pl-btn h-8 px-3" onClick={retry}>
+                      <RefreshCw className="size-3.5" aria-hidden /> Try again
+                    </button>
+                  ) : null}
+                  {message.usedFallback && message.reason === "invalid" ? (
+                    <span className="text-[10px] text-[var(--pl-muted)]">The server rejected malformed or unauthorised interface output before rendering it.</span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        <div ref={scrollRef} />
+      </div>
+
+      {notice?.tone === "danger" && messages.length === 0 ? (
+        <button type="button" className="pl-btn self-start" onClick={() => initial.refetch()}>
+          Reload planning context
+        </button>
+      ) : null}
+
+      {messages.length > 0 ? <div className="sticky bottom-4 z-20">{composer}</div> : null}
+      {!engineAvailable ? (
+        <p className="text-xs text-[var(--pl-muted)]">AI generation is not configured for this organisation. Requests still work and return a readable summary built from the saved trip; general travel questions need AI.</p>
+      ) : null}
+    </section>
+  );
+}
+
+/** Shown until the first chunk arrives: a pen at work and the outline of a page being laid out. */
+function ComposingPlaceholder() {
+  return (
+    <div role="status" className="flex flex-col gap-5">
+      <div className="flex items-center gap-3">
+        <svg aria-hidden viewBox="0 0 120 16" className="pl-scribble h-4 w-24 text-[var(--pl-muted)]">
+          <path d="M2 10 C 14 2, 22 14, 34 8 S 56 4, 66 10 S 90 14, 100 6 S 114 8, 118 9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+        <span className="pl-hand pl-hand-muted">writing back…</span>
+      </div>
+      <div aria-hidden className="flex flex-col gap-4">
+        <div className="pl-sheen h-10 w-3/4 rounded-xl" />
+        <div className="pl-sheen h-5 w-2/3 rounded-lg" />
+        <div className="grid grid-cols-3 gap-4">
+          <div className="pl-sheen aspect-[4/5] rounded-[14px]" />
+          <div className="pl-sheen aspect-[4/5] rounded-[14px]" />
+          <div className="pl-sheen aspect-[4/5] rounded-[14px]" />
+        </div>
+      </div>
     </div>
   );
 }

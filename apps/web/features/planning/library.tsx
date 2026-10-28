@@ -15,6 +15,7 @@ import { TripMap } from "./components/map";
 import { DestinationTimeline } from "./components/timeline";
 import { PlaceMap } from "./components/place-map";
 import { RouteStop, RouteStops } from "./components/route-stops";
+import { BoardDay, Choice, Choices, DayBoard, Highlight, Highlights, LocalFlavours } from "./components/journal";
 import { Callout, ComparisonTable, DayPlan, FollowUps, KeyFacts, Lead, PlaceCard, PlaceGallery, TipList } from "./components/travel";
 
 type PlanningLibrary = ReturnType<typeof createLibrary>;
@@ -57,6 +58,13 @@ export function getPlanningLibrary(): PlanningLibrary {
       Callout,
       ComparisonTable,
       FollowUps,
+      Highlight,
+      Highlights,
+      LocalFlavours,
+      Choice,
+      Choices,
+      BoardDay,
+      DayBoard,
     ],
     componentGroups: planningComponentGroups,
   });

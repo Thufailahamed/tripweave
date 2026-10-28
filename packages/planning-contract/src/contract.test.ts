@@ -39,6 +39,13 @@ describe("planning contract", () => {
       "Callout",
       "ComparisonTable",
       "FollowUps",
+      "Highlight",
+      "Highlights",
+      "LocalFlavours",
+      "Choice",
+      "Choices",
+      "BoardDay",
+      "DayBoard",
     ]);
     expect(Object.keys(getPlanningJSONSchema().properties ?? {}).sort()).toEqual([...PLANNING_COMPONENT_NAMES].sort());
   });

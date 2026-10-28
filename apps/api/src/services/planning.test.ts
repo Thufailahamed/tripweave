@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PlanningSnapshot } from "@tripweave/planning-contract";
 import type { trips } from "@tripweave/database";
+import { PLANNING_EXAMPLES } from "@tripweave/ai";
 import { buildFallbackProgram, buildPlanningQuestions, validatePlanningProgram } from "./planning";
 
 const baseSnapshot: PlanningSnapshot = {
@@ -233,6 +234,15 @@ stops = RouteStops("Your route", [kandy, ella])`;
     expect(validatePlanningProgram(route, baseSnapshot)).toEqual({ ok: true });
   });
 
+  it("accepts a route note and tolerates an extra argument the parser drops", () => {
+    const withNote = `root = PlanningCanvas("Route", [stops])\nkandy = RouteStop("Kandy, Sri Lanka")\nella = RouteStop("Ella, Sri Lanka")\nstops = RouteStops("Kandy to Ella", [kandy, ella], "Through the tea country")`;
+    expect(validatePlanningProgram(withNote, baseSnapshot)).toEqual({ ok: true });
+    const extra = `root = PlanningCanvas("Tips", [tips])\ntips = TipList("Pack", ["Layers"], "an argument TipList does not take")`;
+    expect(validatePlanningProgram(extra, baseSnapshot)).toEqual({ ok: true });
+    const extraWithUrl = `root = PlanningCanvas("Tips", [tips])\ntips = TipList("Pack", ["Layers"], "https://evil.example")`;
+    expect(validatePlanningProgram(extraWithUrl, baseSnapshot)).toEqual({ ok: true });
+  });
+
   it("rejects route stops that hold other blocks, URL-bearing stops and more than five chips", () => {
     const withLead = `root = PlanningCanvas("Route", [stops])\nkandy = RouteStop("Kandy, Sri Lanka")\nlead = Lead("Hello.")\nstops = RouteStops("Your route", [kandy, lead])`;
     expect(validatePlanningProgram(withLead, baseSnapshot)).toMatchObject({ ok: false });
@@ -240,6 +250,44 @@ stops = RouteStops("Your route", [kandy, ella])`;
     expect(validatePlanningProgram(withUrl, baseSnapshot)).toMatchObject({ ok: false });
     const manyChips = `root = PlanningCanvas("Route", [lead], "Estimates.", ["a", "b", "c", "d", "e", "f"])\nlead = Lead("Hello.")`;
     expect(validatePlanningProgram(manyChips, baseSnapshot)).toMatchObject({ ok: false });
+  });
+
+  it("accepts every travel example the prompt teaches", () => {
+    const travelExamples = PLANNING_EXAMPLES.filter((example) => !example.includes("_FROM_CONTEXT"));
+    expect(travelExamples.length).toBeGreaterThanOrEqual(4);
+    for (const example of travelExamples) expect(validatePlanningProgram(example, baseSnapshot), example.slice(0, 60)).toEqual({ ok: true });
+  });
+
+  it("accepts photo boards and choices with a handwritten note and highlight on the canvas", () => {
+    const program = `root = PlanningCanvas("Four days in Kandy", [sights, board, food, when], "Slow days by the lake.", ["4 days"], "walk early, wander late", "Kandy")
+sights = Highlights("Do not miss", [h1, h2])
+h1 = Highlight("Temple of the Tooth, Kandy", "Lakeside", "The relic temple at dusk.")
+h2 = Highlight("Royal Botanic Gardens, Peradeniya")
+board = DayBoard("Four days", [d1], "easy pace")
+d1 = BoardDay("Day 1", ["Kandy Lake, Sri Lanka", "Temple of the Tooth, Kandy"], "Lake and temple")
+food = LocalFlavours("Taste of Kandy", ["Kottu roti", "Hoppers"])
+when = Choices("When would you like to go?", [c1, c2], "Pick your own dates")
+c1 = Choice("Perahera season", "August", "the great procession", "Plan it for the August festival.")
+c2 = Choice("Dry months", "January to April")`;
+    expect(validatePlanningProgram(program, baseSnapshot)).toEqual({ ok: true });
+  });
+
+  it("rejects photo boards that hold the wrong child blocks and choices with prices", () => {
+    const wrongChild = `root = PlanningCanvas("Sights", [sights])
+h1 = Highlight("Kandy, Sri Lanka")
+lead = Lead("Hello.")
+sights = Highlights("Do not miss", [h1, lead])`;
+    expect(validatePlanningProgram(wrongChild, baseSnapshot)).toMatchObject({ ok: false });
+    const dayInChoices = `root = PlanningCanvas("When", [when])
+d1 = BoardDay("Day 1", ["Kandy, Sri Lanka"])
+c1 = Choice("Soon")
+when = Choices("When?", [c1, d1])`;
+    expect(validatePlanningProgram(dayInChoices, baseSnapshot)).toMatchObject({ ok: false });
+    const priced = `root = PlanningCanvas("When", [when])
+c1 = Choice("Cheap", "$200 a night")
+c2 = Choice("Luxury")
+when = Choices("Which style?", [c1, c2])`;
+    expect(validatePlanningProgram(priced, baseSnapshot)).toMatchObject({ ok: false });
   });
 
   it("includes the saved itinerary on the map in the fallback when an itinerary exists", () => {

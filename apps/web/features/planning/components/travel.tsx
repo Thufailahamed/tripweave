@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { defineComponent, useTriggerAction } from "@openuidev/react-lang";
-import { Check, Clock, Info, Languages, Lightbulb, MessageCircle, CalendarDays, Route, Sun, TriangleAlert, Wallet } from "lucide-react";
+import { BedDouble, Camera, Check, Clock, Compass, Info, Languages, Lightbulb, Luggage, MapPinned, CalendarDays, Route, Sun, TriangleAlert, UtensilsCrossed, Wallet } from "lucide-react";
 import {
   CalloutSchema,
   ComparisonTableSchema,
@@ -338,6 +338,18 @@ export const ComparisonTable = defineComponent({
   },
 });
 
+function followUpIcon(question: string) {
+  if (/hotel|stay|room|resort|villa|ryokan|sleep/i.test(question)) return BedDouble;
+  if (/eat|food|dinner|lunch|breakfast|restaurant|cafe|dish|taste/i.test(question)) return UtensilsCrossed;
+  if (/map|where|route|get (?:from|to)|between|distance|far/i.test(question)) return MapPinned;
+  if (/pack|bring|wear|luggage/i.test(question)) return Luggage;
+  if (/when|season|month|weather|best time/i.test(question)) return CalendarDays;
+  if (/day|itinerary|plan|schedule/i.test(question)) return Route;
+  if (/photo|view|sunset|sunrise|see/i.test(question)) return Camera;
+  if (/budget|package|price|cost|value/i.test(question)) return Wallet;
+  return Compass;
+}
+
 export const FollowUps = defineComponent({
   name: "FollowUps",
   description: planningComponentDescriptions.FollowUps,
@@ -345,15 +357,26 @@ export const FollowUps = defineComponent({
   component: function FollowUpsView({ props }) {
     const ask = useAskAssistant();
     return (
-      <section aria-label="Suggested questions" className="flex flex-col gap-2">
-        <p className="pl-hand pl-1">{props.title ?? "keep exploring"}</p>
-        <div className="flex flex-wrap gap-2">
-          {props.questions.map((question, position) => (
-            <button key={`${position}-${question}`} type="button" className="pl-btn h-auto max-w-full py-2.5 text-left leading-snug" onClick={() => ask(question)}>
-              <MessageCircle className="size-3.5 shrink-0 text-[var(--pl-accent)]" aria-hidden />
-              <span>{question}</span>
-            </button>
-          ))}
+      <section aria-label="Suggested questions" className="flex flex-col gap-3">
+        <p className="pl-hand">{props.title ?? "keep exploring"}</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {props.questions.map((question, position) => {
+            const Icon = followUpIcon(question);
+            return (
+              <button
+                key={`${position}-${question}`}
+                type="button"
+                className="pl-tile pl-rise group flex min-h-[112px] flex-col items-start justify-between gap-3 p-4 text-left"
+                style={{ "--i": position } as React.CSSProperties}
+                onClick={() => ask(question)}
+              >
+                <span aria-hidden className="grid size-9 place-items-center rounded-full bg-[var(--pl-accent-soft)] text-[var(--pl-accent)] transition group-hover:rotate-[-6deg] group-hover:scale-105">
+                  <Icon className="size-4" />
+                </span>
+                <span className="text-[13px] font-semibold leading-snug">{question}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
     );

@@ -43,6 +43,8 @@ Generated replies read like a composed travel journal rather than a dashboard:
 - **Iconography.** Components use the existing Lucide set. The model cannot choose icons; each block maps its own facts (dates, guests, budget, amenities, driving) to the right icon.
 - **Interaction.** Package comparison is a tabbed explorer, the budget meter switches between total and per person, hotel comparison expands into a table, explanation details and assumptions are collapsible, the clarification form validates inline, and quick actions only emit the finite host actions below.
 - **Progressive composition.** Blocks stream through the OpenUI renderer, so the interface builds up as the model writes. The server still validates the complete program before treating it as final, and the standard view remains the fallback.
+- **Conversation as a journal.** The planner tab is a borderless column modelled on OpenUI's trip-planner demo: each question is echoed in handwriting, each reply opens with a large serif headline (`PlanningCanvas` takes an optional handwritten `note` and a `highlight` word, which falls back to a saved destination named in the title), and the composer sits under the opening question, then floats at the bottom once a conversation starts. A pen-scribble skeleton shows while the first chunk is on its way, and **New chat** clears the conversation.
+- **Magazine blocks.** `Highlights` shows tilted polaroid postcards that open a story card (Wikipedia extract, "Plan a visit", "What's nearby"); `LocalFlavours` shows photographed dishes the reader can save and ask about; `DayBoard` lays days out as morning/afternoon/evening photo tiles with "Map this day", "Swap it", "Slower pace" and "Add timings"; `Choices` asks a preference question whose cards send a reply written in the reader's voice, with an optional free-text answer. `FollowUps` are icon tiles. Every interaction is local state or the reader's next message.
 - **The whole trip dossier.** The trip detail page scopes the same warm palette (`--background`, `--card`, ink primary and terracotta accent) through `.tw-trip`, so the photographic cover, underline tabs, requirement cards, quote cards and planner read as one document. The cover reuses the destination image map and shows the photo credit; the status editor moved from the image into a compact footer control. The plan composer is only sticky once a conversation exists, so it never covers the opening state.
 
 ## General travel answers
@@ -86,6 +88,7 @@ The finite library is defined in `packages/planning-contract/src/library.ts`:
 - `RecommendationExplanation`
 - `QuickActions`
 - `Lead`, `PlaceCard`, `PlaceGallery`, `PlaceMap`, `DayPlan`, `TipList`, `KeyFacts`, `Callout`, `ComparisonTable`, `FollowUps` (travel guide: text and place names only; `PlaceMap` takes two to twelve names)
+- `Highlights`/`Highlight`, `LocalFlavours`, `DayBoard`/`BoardDay`, `Choices`/`Choice` (magazine blocks: photographic postcards, food and craft tiles, a photo day board and choice cards; text and place names only)
 
 `BudgetMeter` normalises the optimiser's 0..1 sub-scores before rendering, and `TripHero` accepts the optional itinerary ref so the model can compose a photographic cover without inventing image URLs.
 
@@ -148,7 +151,7 @@ Credentials stay in Worker secrets. No inference key is sent to the browser.
 - `Query()`/`Mutation()` statements;
 - IDs that are not in the current snapshot, including cross-tenant trip/package/offer IDs;
 - control characters, overlong text, and model-written price-like strings or URLs in the framing text;
-- more than 40 generated nodes.
+- more than 60 generated nodes.
 
 After an invalid stream the API sends `done.program` as a deterministic program built only from snapshot IDs and sets `usedFallback: true`. The web panel then renders `PlanningFallbackView`, a normal shadcn/ui view over the same snapshot (not the generated program). This is also used for provider errors, timeouts, renderer errors and the explicit **Standard view** toggle.
 

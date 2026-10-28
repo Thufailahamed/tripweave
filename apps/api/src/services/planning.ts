@@ -223,11 +223,14 @@ export async function buildPlanningSnapshot(ctx: AppContext, tripId: string): Pr
   };
 }
 
+/** Photo boards nest their cards, so a rich reply can hold a few dozen nodes; this caps absurd ones. */
+const MAX_NODES = 60;
+
 /** Extracts every ElementNode reachable from the root, with a hard cap against absurd programs. */
 function collectNodes(root: unknown): { nodes: { typeName: string; props: Record<string, unknown> }[]; tooMany: boolean } {
   const nodes: { typeName: string; props: Record<string, unknown> }[] = [];
   const visitValue = (value: unknown): void => {
-    if (nodes.length > 40) return;
+    if (nodes.length > MAX_NODES) return;
     if (Array.isArray(value)) {
       for (const item of value) visitValue(item);
       return;
@@ -239,7 +242,7 @@ function collectNodes(root: unknown): { nodes: { typeName: string; props: Record
     }
   };
   visitValue(root);
-  return { nodes, tooMany: nodes.length > 40 };
+  return { nodes, tooMany: nodes.length > MAX_NODES };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -248,6 +251,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 const PRICE_OR_URL = /(?:\b(?:USD|EUR|GBP|LKR)\b\s?\d|[$€£]\s?\d|\d[\d,.]*\s?\b(?:USD|EUR|GBP|LKR|dollars?|euros?|pounds?|rupees?)\b|https?:\/\/|www\.)/i;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+
+/**
+ * The parser drops extra positional arguments before anything renders, so a reply that passes one too
+ * many (a subtitle a block does not take, say) is still safe and complete. Rejecting it would throw away
+ * a good page over a harmless slip.
+ */
+export const TOLERATED_PARSE_ERRORS: ReadonlySet<string> = new Set(["excess-args"]);
+
+/** Container blocks whose list may hold only one child component, keyed by the list prop. */
+const NESTED_CHILDREN = {
+  Highlights: ["items", "Highlight"],
+  Choices: ["options", "Choice"],
+  DayBoard: ["days", "BoardDay"],
+} as const;
 
 /**
  * Every string the model writes, at any depth, is plain text. Length and bounds are checked by the
@@ -296,7 +313,7 @@ export function validatePlanningProgram(
   const result = parser.parse(program);
   const errors: string[] = [];
   if (result.meta.incomplete) errors.push("incomplete program");
-  for (const error of result.meta.errors) if (error.severity !== "warning") errors.push(`${error.code}: ${error.message}`);
+  for (const error of result.meta.errors) if (error.severity !== "warning" && !TOLERATED_PARSE_ERRORS.has(error.code)) errors.push(`${error.code}: ${error.message}`);
   if (result.meta.unresolved.length > 0) errors.push(`unresolved references: ${result.meta.unresolved.join(", ")}`);
   if (result.queryStatements.length > 0 || result.mutationStatements.length > 0) errors.push("tool calls are not allowed");
   if (!result.root) errors.push("missing root");
@@ -391,6 +408,14 @@ export function validatePlanningProgram(
       case "RouteStops": {
         const stops = Array.isArray(props.stops) ? (props.stops as { typeName?: unknown }[]) : [];
         if (stops.some((stop) => stop?.typeName !== "RouteStop")) errors.push("RouteStops must contain only RouteStop blocks");
+        break;
+      }
+      case "Highlights":
+      case "Choices":
+      case "DayBoard": {
+        const [key, child] = NESTED_CHILDREN[node.typeName];
+        const children = Array.isArray(props[key]) ? (props[key] as { typeName?: unknown }[]) : [];
+        if (children.some((entry) => entry?.typeName !== child)) errors.push(`${node.typeName} must contain only ${child} blocks`);
         break;
       }
       case "ComparisonTable": {

@@ -63,9 +63,8 @@ planningRoutes.post("/trips/:id/planning", requirePermission("trips:read"), rate
   const organizationId = c.get("auth")!.organizationId!;
   const inputChars = body.message.length + body.history.reduce((total, item) => total + item.content.length, 0);
 
-  c.header("cache-control", "no-store");
   c.header("x-accel-buffering", "no");
-  return streamSSE(c, async (stream) => {
+  const response = streamSSE(c, async (stream) => {
     const controller = new AbortController();
     let clientAborted = false;
     stream.onAbort(() => {
@@ -181,6 +180,10 @@ planningRoutes.post("/trips/:id/planning", requirePermission("trips:read"), rate
       clearTimeout(timer);
     }
   });
+  // streamSSE sets "no-cache"; no-transform also stops compressing proxies (including the Next dev
+  // rewrite) from buffering the stream until it ends.
+  response.headers.set("cache-control", "no-store, no-transform");
+  return response;
 });
 
 /**
