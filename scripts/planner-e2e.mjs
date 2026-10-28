@@ -103,6 +103,17 @@ async function waitForCount(locator, count, timeout = 20_000) {
   return false;
 }
 
+/** Cards inside the planner whose content is wider than their box (horizontal scroll areas excluded). */
+async function overflowingCards(page) {
+  return page.evaluate(() => {
+    const boxes = Array.from(document.querySelectorAll(".tw-planner article, .tw-planner section"));
+    return boxes
+      // Boxes that hold a horizontal scroller bleed by design (shadows stay unclipped); only their content is checked.
+      .filter((element) => !element.closest(".pl-scroll, .overflow-x-auto") && !element.querySelector(".pl-scroll, .overflow-x-auto") && element.scrollWidth > element.clientWidth + 2)
+      .map((element) => (element.getAttribute("aria-label") || element.className || element.tagName).toString().slice(0, 60));
+  });
+}
+
 /** True once the image has decoded real pixels (not a broken or missing file). */
 async function imageLoaded(locator) {
   return locator.evaluate((img) => img instanceof HTMLImageElement && img.complete && img.naturalWidth > 0).catch(() => false);
@@ -192,6 +203,26 @@ async function desktopRun(browser, seeded) {
   check("the selected place shows its Wikipedia description", await shows(page.getByText("Ella is a small town in the Badulla District")));
   const mapPlaces = await waitForImages(page, "article img[src*='wikimedia']", 20_000);
   check("the selected place shows a real photograph", mapPlaces >= 1, `loaded ${mapPlaces}`);
+  check("header chips render as a summary list", await shows(page.getByRole("list", { name: "Summary" }).getByText("Walking + transit")));
+  check("route renders as a numbered stop-by-stop timeline", await shows(page.getByText("Your route, stop by stop")));
+  const stopPhotos = await waitForImages(page, "ol img[src*='wikimedia']", 20_000);
+  check("route stop photographs load as real images", stopPhotos >= 2, `loaded ${stopPhotos}`);
+  await page.getByRole("button", { name: "Mark as visited" }).first().click();
+  check("marking a route stop visited toggles it", await shows(page.getByRole("button", { name: "Visited" })));
+  const beforeDirections = posts.length;
+  await page.getByRole("button", { name: "Directions" }).first().click();
+  await page.waitForTimeout(400);
+  check("route stop directions send a question", posts.length > beforeDirections && posts.at(-1).includes("How do I get to Kandy, Sri Lanka from the previous stop?"));
+  await page.getByRole("button", { name: "Fit route" }).first().click();
+  await page.getByRole("button", { name: "Expand map" }).first().click();
+  const fullScreen = page.getByRole("dialog", { name: /full screen/ });
+  check("expanded map opens full screen", await shows(fullScreen));
+  check("full-screen map keeps its numbered markers", await waitForCount(fullScreen.locator(".leaflet-marker-icon"), 3));
+  check("markers show their place names on wide screens", await waitForCount(page.locator(".leaflet-tooltip.tw-map-label"), 3));
+  await page.keyboard.press("Escape");
+  check("Escape closes the full-screen map", (await page.getByRole("dialog", { name: /full screen/ }).count()) === 0);
+  const overflowDesktop = await overflowingCards(page);
+  check("no card content overflows its box on desktop", overflowDesktop.length === 0, overflowDesktop.slice(0, 3).join(" | "));
   await page.screenshot({ path: join(SHOTS, "2-map-desktop.png"), fullPage: true });
 
   const postsBefore = posts.length;
@@ -273,6 +304,8 @@ async function mobileRun(browser, seeded) {
   await page.getByText("Kandy in the cool season").first().waitFor({ timeout: 30_000 });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   check("mobile layout has no horizontal page overflow", overflow <= 1, `overflow ${overflow}px`);
+  const overflowMobile = await overflowingCards(page);
+  check("no card content overflows its box on mobile", overflowMobile.length === 0, overflowMobile.slice(0, 3).join(" | "));
   await page.screenshot({ path: join(SHOTS, "6-guide-mobile.png"), fullPage: true });
   check("no uncaught errors on the mobile run", errors.length === 0, errors.slice(0, 3).join(" | "));
   await context.close();

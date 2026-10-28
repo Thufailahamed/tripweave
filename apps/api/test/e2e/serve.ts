@@ -117,9 +117,13 @@ summary = TripRequirementSummary("${trip}")
 next = QuickActions()`;
   }
   if (/where|map|route|near|how far|between|get from/.test(text)) {
-    return `root = PlanningCanvas("Kandy to Ella by the hills", [lead, route, days, next], "Locations come from public coordinates; travel times are estimates.")
+    return `root = PlanningCanvas("Kandy to Ella by the hills", [lead, route, stops, days, next], "Locations come from public coordinates; travel times are estimates.", ["Walking + transit", "Hill country"])
 lead = Lead("The hill-country route runs from Kandy through Nuwara Eliya to Ella, with cool weather and short walks between the stops.")
 route = PlaceMap("The hill-country route", ["Kandy, Sri Lanka", "Nuwara Eliya, Sri Lanka", "Ella, Sri Lanka", "Atlantis, Sri Lanka"])
+kandy = RouteStop("Kandy, Sri Lanka", "9:00 AM", "60-75 min", "Start at the lake and walk the shoreline.")
+nuwara = RouteStop("Nuwara Eliya, Sri Lanka", "1:30 PM", "3 hours", "Lunch and a tea estate visit.")
+ella = RouteStop("Ella, Sri Lanka", "5:00 PM", "Overnight", "Sunset from the ridge above the town.")
+stops = RouteStops("Your route, stop by stop", [kandy, nuwara, ella])
 days = DayPlan("Day 1", "Kandy to Nuwara Eliya", ["Morning train through the tea country", "Afternoon at a tea estate"])
 next = FollowUps("Keep planning", ["How do I get from Nuwara Eliya to Ella?", "Which stop suits a slow pace?"])`;
   }

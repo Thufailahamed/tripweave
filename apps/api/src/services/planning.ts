@@ -388,6 +388,11 @@ export function validatePlanningProgram(
         for (const packageKey of idArray("packageIds")) if (!packageByRef.has(packageKey)) errors.push("PackageComparison references an unknown package");
         break;
       }
+      case "RouteStops": {
+        const stops = Array.isArray(props.stops) ? (props.stops as { typeName?: unknown }[]) : [];
+        if (stops.some((stop) => stop?.typeName !== "RouteStop")) errors.push("RouteStops must contain only RouteStop blocks");
+        break;
+      }
       case "ComparisonTable": {
         const columns = Array.isArray(props.columns) ? props.columns.length : 0;
         const rows = Array.isArray(props.rows) ? (props.rows as unknown[][]) : [];

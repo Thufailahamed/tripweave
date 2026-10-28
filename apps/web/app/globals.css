@@ -889,6 +889,21 @@ html[data-theme="dark"] .tw-planner .pl-card,
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
 }
+/* Map labels inside generated planner maps: the numbered place name beside each marker. */
+.tw-planner .leaflet-tooltip.tw-map-label {
+  background: var(--pl-surface);
+  border: 1px solid var(--pl-line);
+  border-radius: 999px;
+  box-shadow: 0 6px 16px -10px color-mix(in oklab, #221a10 55%, transparent);
+  color: var(--pl-ink);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+.tw-planner .leaflet-tooltip.tw-map-label::before {
+  display: none;
+}
 .tw-planner .pl-rise {
   animation: pl-rise 0.65s var(--ease-out) both;
   animation-delay: calc(var(--i, 0) * 60ms);

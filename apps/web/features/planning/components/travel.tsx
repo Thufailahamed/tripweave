@@ -49,7 +49,7 @@ export const PlaceCard = defineComponent({
     const ask = useAskAssistant();
     const place = usePlaceImage(props.name);
     return (
-      <article className="pl-card grid overflow-hidden sm:grid-cols-[minmax(0,0.95fr)_minmax(0,1.1fr)]">
+      <article className="pl-card grid h-full overflow-hidden sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="relative min-h-[200px] sm:min-h-[260px]">
           <DestinationPhoto destination={props.name} className="absolute inset-0 size-full pl-photo" />
         </div>
@@ -137,10 +137,10 @@ export const DayPlan = defineComponent({
     const [done, setDone] = React.useState<number[]>([]);
     const toggle = (position: number) => setDone((current) => (current.includes(position) ? current.filter((item) => item !== position) : [...current, position]));
     return (
-      <article className="pl-card grid gap-5 p-5 sm:grid-cols-[minmax(0,160px)_minmax(0,1fr)] sm:p-6">
-        <div className="flex flex-col gap-1.5">
+      <article className="pl-card flex flex-col gap-4 p-5 sm:p-6">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <span className="pl-eyebrow">{props.day}</span>
-          <h3 className="pl-display text-[1.6rem]">{props.title}</h3>
+          <h3 className="pl-display text-[1.6rem] break-words">{props.title}</h3>
         </div>
         <ol className="flex min-w-0 flex-col gap-1.5">
           {props.activities.map((activity, position) => {
@@ -168,7 +168,7 @@ export const DayPlan = defineComponent({
             );
           })}
         </ol>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--pl-line)] pt-3 sm:col-span-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--pl-line)] pt-3">
           <span className="text-[11px] text-[var(--pl-muted)]">
             {done.length} of {props.activities.length} ticked off
           </span>

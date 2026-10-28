@@ -26,6 +26,8 @@ export const PLANNING_COMPONENT_NAMES = [
   "PlaceMap",
   "PlaceCard",
   "PlaceGallery",
+  "RouteStop",
+  "RouteStops",
   "DayPlan",
   "TipList",
   "KeyFacts",
@@ -234,6 +236,30 @@ const PlaceMap = define(
   PlaceMapSchema,
 );
 
+const RouteStopSchema = z.object({
+  name: safeText(80),
+  time: optionalSafeText(20),
+  duration: optionalSafeText(30),
+  note: optionalSafeText(240),
+});
+export { RouteStopSchema };
+const RouteStop = define(
+  "RouteStop",
+  "One stop on a route: its place name with region, an optional time such as '9:00 AM', an optional duration such as '60-75 min' and a short note. The app supplies the photograph and marks it visited when the reader ticks it off.",
+  RouteStopSchema,
+);
+
+const RouteStopsSchema = z.object({
+  title: safeText(100),
+  stops: z.array(RouteStop.ref).min(2).max(10),
+});
+export { RouteStopsSchema };
+const RouteStops = define(
+  "RouteStops",
+  "An ordered route of two to ten RouteStop blocks, shown as a stop-by-stop timeline. Use it for a day's route, a walking tour or the order to visit places. Pass the RouteStop blocks as stops, in visiting order.",
+  RouteStopsSchema,
+);
+
 const DayPlanSchema = z.object({
   day: safeText(40),
   title: safeText(100),
@@ -325,6 +351,7 @@ const PlanningCanvasSchema = z.object({
       PlaceCard.ref,
       PlaceGallery.ref,
       PlaceMap.ref,
+      RouteStops.ref,
       DayPlan.ref,
       TipList.ref,
       KeyFacts.ref,
@@ -334,6 +361,7 @@ const PlanningCanvasSchema = z.object({
     ]),
   ),
   subtitle: optionalSafeText(300),
+  chips: z.array(safeText(40)).max(5).optional(),
 });
 export { PlanningCanvasSchema };
 const PlanningCanvas = define(
@@ -362,6 +390,8 @@ export const planningComponents = [
   PlaceCard,
   PlaceGallery,
   PlaceMap,
+  RouteStop,
+  RouteStops,
   DayPlan,
   TipList,
   KeyFacts,
@@ -396,12 +426,14 @@ export const planningComponentGroups = [
   },
   {
     name: "Travel guide",
-    components: ["Lead", "PlaceGallery", "PlaceCard", "PlaceMap", "DayPlan", "TipList", "KeyFacts", "Callout", "ComparisonTable", "FollowUps"],
+    components: ["Lead", "PlaceGallery", "PlaceCard", "PlaceMap", "RouteStops", "RouteStop", "DayPlan", "TipList", "KeyFacts", "Callout", "ComparisonTable", "FollowUps"],
     notes: [
       "Use these for general travel questions that do not need the saved trip: destinations, seasons, things to see, route and day ideas, packing, etiquette and planning advice.",
       "Open with Lead, then choose two or three visual blocks such as PlaceGallery, DayPlan or TipList. Finish with FollowUps.",
       "PlaceCard and PlaceGallery take a place name with its region only; the app supplies the photograph, so never pass a URL or image.",
       "Use PlaceMap whenever the user asks where places are, how they relate, the route between them or distances. It takes two to twelve place names with regions and plots them on a map; the app locates them.",
+      "For a day or a route in order, use RouteStops with two to ten RouteStop blocks: each RouteStop has the place with its region, a time, a duration and a short note. Put the RouteStop blocks in the stops list in visiting order.",
+      "PlanningCanvas takes optional chips as its fourth argument, after the subtitle: up to five short labels for the header, such as the time window, the travel style or the season.",
       "General guidance is qualitative. Do not state prices, fares, opening hours, visa rules, ratings or availability as facts; use a caution Callout and name the official source instead.",
     ],
   },
@@ -423,7 +455,7 @@ export const planningComponentGroups = [
  * checked on its framing fields only: its block references are validated by the parser.
  */
 export const PLANNING_PROP_SCHEMAS = {
-  PlanningCanvas: PlanningCanvasSchema.pick({ title: true, subtitle: true }),
+  PlanningCanvas: PlanningCanvasSchema.pick({ title: true, subtitle: true, chips: true }),
   TripHero: TripHeroSchema,
   TripRequirementSummary: TripRequirementSummarySchema,
   ClarificationForm: ClarificationFormSchema,
@@ -442,6 +474,8 @@ export const PLANNING_PROP_SCHEMAS = {
   PlaceCard: PlaceCardSchema,
   PlaceGallery: PlaceGallerySchema,
   PlaceMap: PlaceMapSchema,
+  RouteStop: RouteStopSchema,
+  RouteStops: RouteStopsSchema.extend({ stops: z.array(z.unknown()).min(2).max(10) }),
   DayPlan: DayPlanSchema,
   TipList: TipListSchema,
   KeyFacts: KeyFactsSchema,

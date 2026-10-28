@@ -1,9 +1,10 @@
 "use client";
 import * as React from "react";
+import { createPortal } from "react-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { defineComponent } from "@openuidev/react-lang";
-import { ArrowUpRight, MapPinOff, Route } from "lucide-react";
+import { ArrowUpRight, Maximize2, MapPinOff, Minimize2, Route, Scan } from "lucide-react";
 import { PlaceMapSchema, planningComponentDescriptions } from "@tripweave/planning-contract";
 import { cn } from "@/lib/utils";
 import { placeKey, usePlaceInfos } from "../place-image";
@@ -24,10 +25,19 @@ function markerIcon(position: number, selected: boolean) {
   });
 }
 
+interface Located {
+  name: string;
+  key: string;
+  latitude: number;
+  longitude: number;
+  extract: string | null;
+  articleUrl: string | null;
+}
+
 /**
  * Plots named places from their public coordinates, in the order the reply gives them, joined by a
- * dashed route line. Each marker or chip selects a place to explore; places without coordinates are
- * listed rather than guessed at.
+ * dashed route line. Markers carry their number and name, a chip row selects a place to explore, and
+ * the map can be opened full screen. Places without coordinates are listed rather than guessed at.
  */
 export const PlaceMap = defineComponent({
   name: "PlaceMap",
@@ -36,56 +46,93 @@ export const PlaceMap = defineComponent({
   component: function PlaceMapView({ props }) {
     const ask = useAskAssistant();
     const { loading, byKey } = usePlaceInfos(props.places);
-    const located = props.places
-      .map((name) => ({ name, key: placeKey(name), info: byKey[placeKey(name)] ?? null }))
-      .filter((place): place is { name: string; key: string; info: NonNullable<typeof place.info> } => place.info?.latitude != null && place.info?.longitude != null);
+    const located: Located[] = props.places.flatMap((name) => {
+      const key = placeKey(name);
+      const info = byKey[key];
+      if (!info || info.latitude == null || info.longitude == null) return [];
+      return [{ name, key, latitude: info.latitude, longitude: info.longitude, extract: info.extract, articleUrl: info.articleUrl }];
+    });
     const unlocated = props.places.filter((name) => !located.some((place) => place.key === placeKey(name)));
-    const signature = located.map((place) => `${place.key}:${place.info.latitude},${place.info.longitude}`).join("|");
+    const signature = located.map((place) => `${place.key}:${place.latitude},${place.longitude}`).join("|");
     const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
+    const [expanded, setExpanded] = React.useState(false);
     const activeKey = located.some((place) => place.key === selectedKey) ? selectedKey : (located[0]?.key ?? null);
     const active = located.find((place) => place.key === activeKey) ?? null;
+    const hasMap = located.length > 0;
 
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const mapRef = React.useRef<L.Map | null>(null);
     const layerRef = React.useRef<L.LayerGroup | null>(null);
+    const pointsRef = React.useRef<L.LatLngTuple[]>([]);
     const selectRef = React.useRef<(key: string) => void>(() => undefined);
     selectRef.current = setSelectedKey;
 
+    // The map is recreated when it is shown or hidden or moved to the full-screen layer.
     React.useEffect(() => {
       const node = containerRef.current;
-      if (!node || located.length === 0) return;
-      if (!mapRef.current) {
-        const map = L.map(node, { scrollWheelZoom: false, attributionControl: true });
-        L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 18 }).addTo(map);
-        mapRef.current = map;
-        layerRef.current = L.layerGroup().addTo(map);
-      }
-      const map = mapRef.current!;
-      const layer = layerRef.current!;
-      layer.clearLayers();
-      const points = located.map((place) => [place.info.latitude!, place.info.longitude!] as L.LatLngTuple);
-      located.forEach((place, index) => {
-        L.marker([place.info.latitude!, place.info.longitude!], { icon: markerIcon(index + 1, place.key === activeKey), title: place.name, alt: place.name })
-          .on("click", () => selectRef.current(place.key))
-          .addTo(layer);
-      });
-      if (points.length >= 2) L.polyline(points, { color: "#c25736", weight: 3, dashArray: "6 8" }).addTo(layer);
-      if (points.length >= 2) map.fitBounds(L.latLngBounds(points), { padding: [36, 36], maxZoom: 11 });
-      else map.setView(points[0]!, 9);
-      map.invalidateSize();
-      // The signature captures the located places; the active marker is refreshed with them.
-    }, [signature, activeKey]);
-
-    React.useEffect(
-      () => () => {
-        mapRef.current?.remove();
+      if (!node || !hasMap) return;
+      const map = L.map(node, { scrollWheelZoom: false, attributionControl: true, zoomControl: true });
+      L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 18 }).addTo(map);
+      mapRef.current = map;
+      layerRef.current = L.layerGroup().addTo(map);
+      requestAnimationFrame(() => map.invalidateSize());
+      return () => {
+        map.remove();
         mapRef.current = null;
         layerRef.current = null;
-      },
-      [],
-    );
+      };
+    }, [expanded, hasMap]);
+
+    // Markers, labels and the route line follow the located places and the selection.
+    React.useEffect(() => {
+      const map = mapRef.current;
+      const layer = layerRef.current;
+      if (!map || !layer) return;
+      layer.clearLayers();
+      const points = located.map((place) => [place.latitude, place.longitude] as L.LatLngTuple);
+      pointsRef.current = points;
+      const wide = typeof window.matchMedia === "function" && window.matchMedia("(min-width: 640px)").matches;
+      located.forEach((place, index) => {
+        const marker = L.marker([place.latitude, place.longitude], { icon: markerIcon(index + 1, place.key === activeKey), title: place.name, alt: place.name, keyboard: true });
+        marker.bindTooltip(`${index + 1}. ${place.name}`, { permanent: wide, direction: "right", offset: [16, 0], className: "tw-map-label", interactive: false });
+        marker.on("click", () => selectRef.current(place.key));
+        marker.addTo(layer);
+      });
+      if (points.length >= 2) L.polyline(points, { color: "#c25736", weight: 3, dashArray: "6 8" }).addTo(layer);
+      if (points.length >= 2) map.fitBounds(L.latLngBounds(points), { padding: [44, 44], maxZoom: 11 });
+      else if (points.length === 1) map.setView(points[0]!, 9);
+      map.invalidateSize();
+    }, [signature, activeKey, expanded]);
+
+    React.useEffect(() => {
+      if (!expanded) return;
+      const onKey = (event: KeyboardEvent) => {
+        if (event.key === "Escape") setExpanded(false);
+      };
+      // Capture phase: Leaflet's keyboard handling stops Escape before it bubbles to the window.
+      window.addEventListener("keydown", onKey, true);
+      return () => window.removeEventListener("keydown", onKey, true);
+    }, [expanded]);
 
     const title = props.title ?? "Places on the map";
+    const mapNode = <div ref={containerRef} role="region" aria-label="Map of the places" className="size-full" />;
+    const toolbar = (
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button type="button" className="pl-btn" onClick={() => {
+          const map = mapRef.current;
+          if (!map || pointsRef.current.length === 0) return;
+          if (pointsRef.current.length === 1) map.setView(pointsRef.current[0]!, 9);
+          else map.fitBounds(L.latLngBounds(pointsRef.current), { padding: [44, 44], maxZoom: 11 });
+        }}>
+          <Scan className="size-3.5" aria-hidden /> Fit route
+        </button>
+        <button type="button" className="pl-btn" aria-pressed={expanded} onClick={() => setExpanded((value) => !value)}>
+          {expanded ? <Minimize2 className="size-3.5" aria-hidden /> : <Maximize2 className="size-3.5" aria-hidden />}
+          {expanded ? "Close map" : "Expand map"}
+        </button>
+      </div>
+    );
+
     return (
       <section aria-label={title} className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -95,16 +142,32 @@ export const PlaceMap = defineComponent({
           </span>
         </div>
 
-        {located.length > 0 ? (
-          <div ref={containerRef} role="region" aria-label="Map of the places" className="h-[320px] w-full overflow-hidden rounded-[18px] border border-[var(--pl-line)] sm:h-[380px]" />
-        ) : !loading ? (
+        {hasMap && !expanded ? (
+          <>
+            {toolbar}
+            <div className="relative h-[320px] w-full overflow-hidden rounded-[18px] border border-[var(--pl-line)] sm:h-[400px]">{mapNode}</div>
+          </>
+        ) : !hasMap && !loading ? (
           <div className="flex items-start gap-3 rounded-[18px] border border-dashed border-[var(--pl-line)] p-4 text-[12px] text-[var(--pl-muted)]">
             <MapPinOff className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p>None of these places could be located on the map right now. Ask the assistant to describe them instead.</p>
           </div>
-        ) : (
+        ) : !hasMap ? (
           <div className="h-[220px] animate-pulse rounded-[18px] bg-[var(--pl-surface-2)]" aria-hidden />
-        )}
+        ) : null}
+
+        {expanded && hasMap && typeof document !== "undefined"
+          ? createPortal(
+              <div role="dialog" aria-modal="true" aria-label={`${title} (full screen)`} className="tw-planner fixed inset-0 z-[90] flex flex-col gap-3 bg-[var(--pl-bg)] p-3 sm:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="pl-eyebrow">{title}</p>
+                  {toolbar}
+                </div>
+                <div className="relative min-h-0 flex-1 overflow-hidden rounded-[18px] border border-[var(--pl-line)]">{mapNode}</div>
+              </div>,
+              document.body,
+            )
+          : null}
 
         {located.length > 0 ? (
           <div role="group" aria-label="Jump to a place on the map" className="pl-scroll flex gap-2 overflow-x-auto pb-1">
@@ -132,14 +195,14 @@ export const PlaceMap = defineComponent({
         ) : null}
 
         {active ? (
-          <article className="pl-card grid overflow-hidden sm:grid-cols-[minmax(0,200px)_minmax(0,1fr)]">
-            <div className="relative aspect-[4/3] sm:aspect-auto sm:min-h-[180px]">
+          <article className="pl-card grid overflow-hidden sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+            <div className="relative aspect-[4/3] sm:aspect-auto sm:min-h-[200px]">
               <DestinationPhoto destination={active.name} className="absolute inset-0 size-full pl-photo" />
             </div>
             <div className="flex min-w-0 flex-col gap-2.5 p-4 sm:p-5">
-              <p className="pl-display text-[1.5rem]">{active.name}</p>
+              <p className="pl-display text-[1.5rem] break-words">{active.name}</p>
               <p className="line-clamp-4 text-[13px] leading-relaxed text-[var(--pl-muted)]">
-                {active.info.extract ?? "Ask the assistant what to see here and how long to stay."}
+                {active.extract ?? "Ask the assistant what to see here and how long to stay."}
               </p>
               <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
                 <button type="button" className="pl-btn pl-btn-solid" onClick={() => ask(`Tell me about ${active.name}: what to see, how long to stay and how to get there.`)}>
@@ -158,8 +221,8 @@ export const PlaceMap = defineComponent({
                     <Route className="size-3.5" aria-hidden /> Route to next stop
                   </button>
                 ) : null}
-                {active.info.articleUrl ? (
-                  <a href={active.info.articleUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-[11px] text-[var(--pl-muted)] underline decoration-[var(--pl-line)] underline-offset-2 hover:text-[var(--pl-ink)]">
+                {active.articleUrl ? (
+                  <a href={active.articleUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-[11px] text-[var(--pl-muted)] underline decoration-[var(--pl-line)] underline-offset-2 hover:text-[var(--pl-ink)]">
                     Read on Wikipedia <ArrowUpRight className="size-3" aria-hidden />
                   </a>
                 ) : null}

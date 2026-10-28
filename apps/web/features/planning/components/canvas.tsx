@@ -33,6 +33,15 @@ export const PlanningCanvas = defineComponent({
               {props.title}
             </h2>
             {props.subtitle ? <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-[var(--pl-muted)]">{props.subtitle}</p> : null}
+            {props.chips && props.chips.length > 0 ? (
+              <ul aria-label="Summary" className="mt-4 flex flex-wrap gap-1.5">
+                {props.chips.map((chip, position) => (
+                  <li key={`${position}-${chip}`} className="pl-chip">
+                    {chip}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </header>
         <div className="mt-6 grid min-w-0 gap-5 [&>*]:min-w-0">{renderNode(props.blocks)}</div>

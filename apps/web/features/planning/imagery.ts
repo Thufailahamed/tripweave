@@ -125,8 +125,10 @@ export function destinationImage(name: string | null | undefined): DestinationIm
   const key = destinationKey(name);
   if (!key) return null;
   if (IMAGES[key]) return IMAGES[key]!;
-  const match = Object.keys(IMAGES).find((candidate) => key === candidate || key.includes(candidate) || candidate.includes(key));
-  return match ? IMAGES[match]! : null;
+  // Match the exact name or its first segment ("Kandy, Sri Lanka" -> "kandy"), never a longer name that
+  // merely contains a curated one, so a place cannot borrow another destination's photograph.
+  const head = destinationKey((name ?? "").split(",")[0]);
+  return IMAGES[head] ?? null;
 }
 
 export function hotelImageUrl(imageId: string | null | undefined): string | null {

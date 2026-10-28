@@ -82,6 +82,8 @@ export function DestinationPhoto({
     setFailed(false);
   }, [src]);
 
+  const loading = !src && !failed && !imageId && !source && remote === undefined && destination.trim().length > 0;
+  if (loading) return <div aria-hidden className={cn("pl-sheen size-full", className)} />;
   if (!src || failed) return <PostcardArt destination={destination} className={className} />;
 
   return (

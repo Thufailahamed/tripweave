@@ -195,3 +195,61 @@ map = PlaceMap("Unknown", ["Atlantis, Sri Lanka", "Lemuria, Sri Lanka"])`);
     expect(screen.queryByRole("region", { name: "Map of the places" })).not.toBeInTheDocument();
   });
 });
+
+describe("route stops and header chips", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const route = `root = PlanningCanvas("Kandy to Ella", [stops], "Locations are estimates.", ["Walking + transit", "Hill country"])
+kandy = RouteStop("Kandy, Sri Lanka", "9:00 AM", "60-75 min", "Start at the lake.")
+nuwara = RouteStop("Nuwara Eliya, Sri Lanka", "1:30 PM", "3 hours", "Lunch and a tea estate.")
+stops = RouteStops("Your route, stop by stop", [kandy, nuwara])`;
+
+  it("renders numbered stops with photographs, times and a visited toggle that keeps its own state", async () => {
+    stubPlaces();
+    renderProgram(route);
+    expect(await screen.findByText("Your route, stop by stop")).toBeInTheDocument();
+    expect(screen.getByText("2 stops")).toBeInTheDocument();
+    expect(screen.getByText("9:00 AM")).toBeInTheDocument();
+    expect(screen.getByText("3 hours")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Mark as visited" })[0]!);
+    expect(screen.getByRole("button", { name: "Visited" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByRole("button", { name: "Mark as visited" })).toHaveLength(1);
+  });
+
+  it("sends directions to a stop back to the assistant", async () => {
+    stubPlaces();
+    const onAction = renderProgram(route);
+    fireEvent.click((await screen.findAllByRole("button", { name: /Directions/ }))[1]!);
+    expect(onAction).toHaveBeenLastCalledWith(expect.objectContaining({ humanFriendlyMessage: expect.stringContaining("How do I get to Nuwara Eliya, Sri Lanka from the previous stop?") }));
+  });
+
+  it("shows header chips as a summary list", () => {
+    renderProgram(`root = PlanningCanvas("Kandy to Ella", [lead], "Estimates.", ["Walking + transit", "Hill country"])\nlead = Lead("Hello.")`);
+    const summary = screen.getByRole("list", { name: "Summary" });
+    expect(within(summary).getByText("Walking + transit")).toBeInTheDocument();
+    expect(within(summary).getByText("Hill country")).toBeInTheDocument();
+  });
+});
+
+describe("PlaceMap full screen", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("opens the map full screen, can refit the route, and closes with Escape", async () => {
+    stubPlaces();
+    renderProgram(`root = PlanningCanvas("Route", [map], "Where.")
+map = PlaceMap("Kandy to Ella", ["Kandy, Sri Lanka", "Ella, Sri Lanka"])`);
+    await screen.findByText("2 of 2 located");
+    fireEvent.click(screen.getByRole("button", { name: /Fit route/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Expand map/ }));
+    const dialog = screen.getByRole("dialog", { name: "Kandy to Ella (full screen)" });
+    expect(within(dialog).getByRole("button", { name: /Close map/ })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Kandy to Ella (full screen)" })).not.toBeInTheDocument();
+  });
+});

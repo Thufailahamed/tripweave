@@ -225,6 +225,23 @@ next = FollowUps("Keep going", ["Where should I stay in Ella?"])`;
     expect(validatePlanningProgram(map, baseSnapshot, { requireMap: true })).toEqual({ ok: true });
   });
 
+  it("accepts route stops made of RouteStop blocks and header chips as the fourth argument", () => {
+    const route = `root = PlanningCanvas("Route", [stops], "Estimates.", ["Walking", "Hill country"])
+kandy = RouteStop("Kandy, Sri Lanka", "9:00 AM", "60 min", "Start at the lake.")
+ella = RouteStop("Ella, Sri Lanka")
+stops = RouteStops("Your route", [kandy, ella])`;
+    expect(validatePlanningProgram(route, baseSnapshot)).toEqual({ ok: true });
+  });
+
+  it("rejects route stops that hold other blocks, URL-bearing stops and more than five chips", () => {
+    const withLead = `root = PlanningCanvas("Route", [stops])\nkandy = RouteStop("Kandy, Sri Lanka")\nlead = Lead("Hello.")\nstops = RouteStops("Your route", [kandy, lead])`;
+    expect(validatePlanningProgram(withLead, baseSnapshot)).toMatchObject({ ok: false });
+    const withUrl = `root = PlanningCanvas("Route", [stops])\nkandy = RouteStop("https://evil.example/kandy")\nella = RouteStop("Ella, Sri Lanka")\nstops = RouteStops("Your route", [kandy, ella])`;
+    expect(validatePlanningProgram(withUrl, baseSnapshot)).toMatchObject({ ok: false });
+    const manyChips = `root = PlanningCanvas("Route", [lead], "Estimates.", ["a", "b", "c", "d", "e", "f"])\nlead = Lead("Hello.")`;
+    expect(validatePlanningProgram(manyChips, baseSnapshot)).toMatchObject({ ok: false });
+  });
+
   it("includes the saved itinerary on the map in the fallback when an itinerary exists", () => {
     const fallback = buildFallbackProgram(packageSnapshot);
     expect(fallback).toContain("TripMap(");
