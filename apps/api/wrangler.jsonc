@@ -14,7 +14,8 @@
     "APP_BASE_URL": "http://localhost:3000",
     "SESSION_COOKIE_NAME": "tw_session",
     "COOKIE_SECURE": "false",
-    "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "AI_MODEL": "@cf/google/gemma-4-26b-a4b-it",
+    "AI_GATEWAY_ID": "default",
     "ROUTING_PROVIDER": "estimate",
     "HOTEL_EXTERNAL_PROVIDER": "google_hotels",
     "HOTEL_DISCOVERY": "true",
@@ -36,9 +37,9 @@
   ],
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "tripweave-media" }],
   "kv_namespaces": [{ "binding": "CACHE", "id": "00000000000000000000000000000000" }],
-  // NOTE: the Workers AI binding is only declared for staging/production. Workers AI has no local
-  // emulation (it needs a Cloudflare API token even under `wrangler dev`), so local development uses the
-  // deterministic rule-based parser. Use `wrangler dev --remote` with an API token to test Workers AI.
+  // Workers AI always runs remotely. `remote: true` lets local `wrangler dev` use the real binding while
+  // keeping D1/R2/Queues local. Requests are routed through the AI Gateway named by AI_GATEWAY_ID.
+  "ai": { "binding": "AI", "remote": true },
 
   "queues": {
     "producers": [{ "binding": "JOBS", "queue": "tripweave-jobs" }],
@@ -65,7 +66,8 @@
         "APP_BASE_URL": "https://staging.example.com",
         "SESSION_COOKIE_NAME": "__Host-tw_session",
         "COOKIE_SECURE": "true",
-        "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        "AI_MODEL": "@cf/google/gemma-4-26b-a4b-it",
+        "AI_GATEWAY_ID": "default",
         "ROUTING_PROVIDER": "google",
         "HOTEL_EXTERNAL_PROVIDER": "hotelbeds,amadeus,google_hotels",
         "HOTEL_DISCOVERY": "true",
@@ -98,7 +100,8 @@
         "APP_BASE_URL": "https://app.example.com",
         "SESSION_COOKIE_NAME": "__Host-tw_session",
         "COOKIE_SECURE": "true",
-        "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        "AI_MODEL": "@cf/google/gemma-4-26b-a4b-it",
+        "AI_GATEWAY_ID": "default",
         "ROUTING_PROVIDER": "google",
         "HOTEL_EXTERNAL_PROVIDER": "hotelbeds,amadeus,google_hotels",
         "HOTEL_DISCOVERY": "true",

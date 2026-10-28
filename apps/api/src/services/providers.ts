@@ -75,8 +75,9 @@ export function defaultBuildProviders(env: Env, db: Db, _orgId: string, opts: { 
 }
 
 export function defaultBuildLlm(env: Env): LlmClient | null {
-  if (env.AI) return new WorkersAiClient(env.AI, env.AI_MODEL);
-  if (env.LLM_PROVIDER && env.LLM_API_KEY && env.LLM_BASE_URL && env.LLM_MODEL) return new ExternalLlmClient({ apiKey: env.LLM_API_KEY, baseUrl: env.LLM_BASE_URL, model: env.LLM_MODEL });
+  if (env.AI) return new WorkersAiClient(env.AI, env.AI_MODEL, env.AI_GATEWAY_ID);
+  if (env.LLM_PROVIDER && env.LLM_API_KEY && env.LLM_BASE_URL && env.LLM_MODEL)
+    return new ExternalLlmClient({ apiKey: env.LLM_API_KEY, baseUrl: env.LLM_BASE_URL, model: env.LLM_MODEL, gatewayId: env.LLM_GATEWAY_ID });
   return null;
 }
 

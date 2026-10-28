@@ -338,7 +338,7 @@ Live verification:
 ## Verification
 
 - `node --test scripts/google-hotels-direct.test.mjs` — 6/6 passing.
-- `pnpm test` — 227/227 passing across 26 files.
+- `pnpm test` — 280/280 passing across 34 files.
 - `pnpm typecheck` — clean across all workspaces.
 - Live comparison: 9 search runs (3 per stop) and 22 fresh entity fetches, 0 failures; per-entity
   median 787 ms, p95 1,045 ms.

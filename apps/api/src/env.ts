@@ -15,6 +15,10 @@ export interface Env {
   MEDIA?: R2Bucket;
   CACHE?: KVNamespace;
   AI?: AiBinding;
+  /** AI Gateway name used for Workers AI (and optionally external OpenAI-compatible) requests. */
+  AI_GATEWAY_ID?: string;
+  /** Optional AI Gateway name for an external OpenAI-compatible provider. */
+  LLM_GATEWAY_ID?: string;
   JOBS?: Queue<JobMessage>;
   OPTIMISATION_WORKFLOW?: Workflow<JobMessage>;
 

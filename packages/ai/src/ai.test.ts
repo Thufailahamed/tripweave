@@ -124,6 +124,17 @@ describe("parseTripRequest", () => {
     expect(r.parsed.adults).toBe(2);
   });
 
+  it("fills omitted unknown fields instead of discarding an otherwise valid model response", async () => {
+    const r = await parseTripRequest(ENQUIRY, { llm: llm(async () => ({ adults: 2, destinations: ["Kandy"] })) });
+    expect(r.engine).toBe("workers_ai");
+    expect(r.parsed.adults).toBe(2);
+    expect(r.parsed.destinations).toEqual(["Kandy"]);
+    expect(r.parsed.arrivalDate).toBeNull();
+    expect(r.parsed.children).toBeNull();
+    expect(r.parsed.childAges).toEqual([]);
+    expect(parsedTripSchema.safeParse(r.parsed).success).toBe(true);
+  });
+
   it("retries malformed output once, then recovers", async () => {
     let calls = 0;
     const r = await parseTripRequest(ENQUIRY, { llm: llm(async (a) => (++calls === 1 ? "this is not json" : (expect(a.user).toMatch(/previous reply was invalid/), JSON.stringify(good)))), maxAttempts: 2 });

@@ -10,6 +10,10 @@ export interface LlmClient {
   readonly model: string;
   /** Returns the raw model output (object or JSON string) for the structured-extraction prompt. */
   extract(args: { system: string; user: string; schema: object; signal: AbortSignal }): Promise<unknown>;
+  /** Plain-text completion, used by the planning interface when streaming is unavailable. */
+  generate?(args: { system: string; user: string; signal: AbortSignal; maxTokens?: number }): Promise<string>;
+  /** Plain-text token/chunk stream for progressive Generative UI rendering. */
+  stream?(args: { system: string; user: string; signal: AbortSignal; maxTokens?: number }): AsyncIterable<string>;
 }
 
 export interface ParseOptions {
@@ -77,6 +81,17 @@ function coerceModelOutput(raw: unknown): unknown {
   return raw;
 }
 
+/**
+ * Some models omit unknown fields instead of emitting null/[] (Gemma 4 commonly does). Missing fields
+ * mean "unknown", so fill them from a blank parse before Zod validation. Provided values are never
+ * replaced, and wrong types still fail validation.
+ */
+const EMPTY_PARSED = extractWithRules("");
+function fillMissingParsedFields(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  return { ...EMPTY_PARSED, ...(raw as Record<string, unknown>) };
+}
+
 /** Drops anything the model produced that the enquiry text does not support for hard facts. */
 function groundAgainstText(p: ParsedTrip, text: string): ParsedTrip {
   const lower = text.toLowerCase();
@@ -124,7 +139,7 @@ export async function parseTripRequest(text: string, opts: ParseOptions = {}): P
           signal: controller.signal,
         });
         outputChars = typeof raw === "string" ? raw.length : JSON.stringify(raw ?? "").length;
-        const validated = parsedTripSchema.safeParse(coerceModelOutput(raw));
+        const validated = parsedTripSchema.safeParse(fillMissingParsedFields(coerceModelOutput(raw)));
         if (!validated.success) {
           lastError = validated.error.issues.slice(0, 3).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
           continue;

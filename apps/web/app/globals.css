@@ -624,6 +624,301 @@ html:not([data-theme="light"]) .tw-map-dark .leaflet-tile-pane {
   color: var(--foreground);
 }
 
+/* ==========================================================================
+ * Trip dossier. The trip detail page adopts the generated planner's travel-journal palette so the
+ * cover, tabs, cards and planner read as one document. Tokens are scoped, so the rest of the app is
+ * untouched.
+ * ========================================================================== */
+.tw-trip {
+  --background: #f5f0e6;
+  --foreground: #1c1a15;
+  --card: #fffdf8;
+  --card-foreground: #1c1a15;
+  --muted: #ece4d5;
+  --muted-foreground: #6f695c;
+  --border: #e0d7c7;
+  --input: #d7cdbb;
+  --ring: #c25736;
+  --primary: #1c1a15;
+  --primary-foreground: #fbf7ee;
+  --primary-soft: #ece4d5;
+  --accent: #c25736;
+  --accent-foreground: #fff8f2;
+  --accent-soft: #f7e3d7;
+  --destructive: #b3402f;
+  --destructive-soft: #fbe6e1;
+  --success: #4f7a54;
+  --success-soft: #e7efe3;
+  --warning: #a2793d;
+  --warning-soft: #f6ecd9;
+  --info: #55705f;
+  --info-soft: #e8eee6;
+  --shadow-card: 0 1px 2px rgba(40, 32, 20, 0.04), 0 18px 40px -30px rgba(40, 32, 20, 0.28);
+  color: var(--foreground);
+  background:
+    radial-gradient(120% 70% at 100% 0%, color-mix(in oklab, var(--accent) 6%, transparent), transparent 58%),
+    radial-gradient(90% 60% at 0% 100%, color-mix(in oklab, var(--success) 6%, transparent), transparent 60%),
+    var(--background);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  box-shadow: 0 40px 90px -60px rgba(40, 32, 20, 0.5);
+}
+html[data-theme="dark"] .tw-trip {
+  --background: #121a17;
+  --foreground: #f5efe3;
+  --card: #19231e;
+  --card-foreground: #f5efe3;
+  --muted: #22302a;
+  --muted-foreground: #a69e90;
+  --border: #2c3832;
+  --input: #3a4741;
+  --ring: #e8835f;
+  --primary: #f5efe3;
+  --primary-foreground: #121a17;
+  --primary-soft: #22302a;
+  --accent: #e8835f;
+  --accent-foreground: #1c110c;
+  --accent-soft: #35241d;
+  --destructive: #e8835f;
+  --destructive-soft: #3a241f;
+  --success: #9db18b;
+  --success-soft: #22302a;
+  --warning: #d3a96b;
+  --warning-soft: #33281a;
+  --info: #8fb4c9;
+  --info-soft: #1c2c33;
+  --shadow-card: none;
+  box-shadow: none;
+}
+.tw-trip .tw-trip-display,
+.tw-trip .font-display {
+  font-family: var(--font-instrument), Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.028em;
+}
+.tw-trip .tw-trip-display {
+  line-height: 1;
+}
+.tw-trip h3.font-display {
+  font-size: 1.2rem;
+  line-height: 1.12;
+}
+
+/* The OpenUI devtools auto-mount in development. They are useful while editing the component
+ * library, but they are not part of TripWeave's product UI, so keep the launcher out of the app. */
+[data-openui-devtools-root] {
+  display: none !important;
+}
+
+/* ==========================================================================
+ * Generated planning interface ("travel journal").
+ * A self-contained paper surface used only by OpenUI-rendered blocks. It keeps its own warm
+ * palette so generated replies look like a composed document inside the app, in light or dark.
+ * ========================================================================== */
+.tw-planner {
+  --pl-bg: #f4efe4;
+  --pl-surface: #fffdf8;
+  --pl-surface-2: #faf5ea;
+  --pl-ink: #1c1a15;
+  --pl-muted: #706a5d;
+  --pl-line: #e2dacb;
+  --pl-accent: #c25736;
+  --pl-accent-soft: #f7e3d7;
+  --pl-sage: #5c7050;
+  --pl-sage-soft: #e9eee1;
+  --pl-gold: #a2793d;
+  color: var(--pl-ink);
+  background:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in oklab, var(--pl-accent) 7%, transparent), transparent 55%),
+    radial-gradient(100% 80% at 0% 100%, color-mix(in oklab, var(--pl-sage) 8%, transparent), transparent 60%),
+    var(--pl-bg);
+  font-family: var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.011em;
+  border: 1px solid color-mix(in oklab, var(--pl-line) 88%, transparent);
+  border-radius: 26px;
+  overflow: hidden;
+}
+html[data-theme="dark"] .tw-planner,
+:root:not([data-theme="light"]) .tw-planner:not(.tw-planner-light) {
+  --pl-bg: #121a17;
+  --pl-surface: #19231e;
+  --pl-surface-2: #1d2822;
+  --pl-ink: #f5efe3;
+  --pl-muted: #a69e90;
+  --pl-line: #2c3832;
+  --pl-accent: #e8835f;
+  --pl-accent-soft: #35241d;
+  --pl-sage: #9db18b;
+  --pl-sage-soft: #22302a;
+  --pl-gold: #d3a96b;
+}
+.tw-planner .pl-display {
+  font-family: var(--font-instrument), Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.028em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+.tw-planner .pl-hand {
+  font-family: var(--font-caveat), "Bradley Hand", cursive;
+  color: var(--pl-accent);
+  font-size: 1.35rem;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+.tw-planner .pl-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.19em;
+  text-transform: uppercase;
+  color: var(--pl-muted);
+}
+.tw-planner .pl-card {
+  background: var(--pl-surface);
+  border: 1px solid var(--pl-line);
+  border-radius: 20px;
+  box-shadow: 0 1px 0 color-mix(in oklab, #fff 55%, transparent) inset, 0 18px 34px -30px color-mix(in oklab, #221a10 40%, transparent);
+}
+html[data-theme="dark"] .tw-planner .pl-card,
+:root:not([data-theme="light"]) .tw-planner:not(.tw-planner-light) .pl-card {
+  box-shadow: none;
+}
+.tw-planner .pl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--pl-line);
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--pl-muted);
+  background: color-mix(in oklab, var(--pl-surface) 70%, transparent);
+  white-space: nowrap;
+}
+.tw-planner .pl-chip-accent {
+  border-color: color-mix(in oklab, var(--pl-accent) 35%, var(--pl-line));
+  background: var(--pl-accent-soft);
+  color: color-mix(in oklab, var(--pl-accent) 78%, var(--pl-ink));
+}
+.tw-planner .pl-chip-sage {
+  border-color: color-mix(in oklab, var(--pl-sage) 35%, var(--pl-line));
+  background: var(--pl-sage-soft);
+  color: color-mix(in oklab, var(--pl-sage) 75%, var(--pl-ink));
+}
+.tw-planner .pl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 999px;
+  border: 1px solid var(--pl-line);
+  background: var(--pl-surface);
+  color: var(--pl-ink);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  transition: transform 0.25s var(--ease-out), border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+}
+.tw-planner .pl-btn:hover {
+  border-color: color-mix(in oklab, var(--pl-ink) 28%, var(--pl-line));
+  box-shadow: 0 10px 22px -16px color-mix(in oklab, #221a10 50%, transparent);
+  transform: translateY(-1px);
+}
+.tw-planner .pl-btn:active {
+  transform: translateY(0) scale(0.985);
+}
+.tw-planner .pl-btn-solid {
+  background: var(--pl-ink);
+  border-color: var(--pl-ink);
+  color: var(--pl-bg);
+}
+.tw-planner .pl-btn-accent {
+  background: var(--pl-accent);
+  border-color: var(--pl-accent);
+  color: #fff8f2;
+}
+.tw-planner .pl-input {
+  width: 100%;
+  border: 1px solid var(--pl-line);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--pl-surface) 82%, transparent);
+  padding: 9px 11px;
+  font-size: 13px;
+  color: var(--pl-ink);
+}
+.tw-planner .pl-input::placeholder {
+  color: color-mix(in oklab, var(--pl-muted) 80%, transparent);
+}
+.tw-planner .pl-input:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--pl-accent) 55%, transparent);
+  outline-offset: 1px;
+  border-color: color-mix(in oklab, var(--pl-accent) 55%, var(--pl-line));
+}
+.tw-planner .pl-rule {
+  height: 1px;
+  background: repeating-linear-gradient(90deg, var(--pl-line) 0 5px, transparent 5px 9px);
+}
+.tw-planner .pl-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--pl-muted) 35%, transparent) transparent;
+}
+.tw-planner .pl-scroll::-webkit-scrollbar {
+  height: 7px;
+}
+.tw-planner .pl-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--pl-muted) 30%, transparent);
+  border-radius: 999px;
+}
+.tw-planner .pl-photo {
+  overflow: hidden;
+  background: var(--pl-surface-2);
+}
+.tw-planner .pl-photo img {
+  transition: transform 1.2s var(--ease-out), scale 1.2s var(--ease-out);
+}
+.tw-planner .pl-photo:hover img {
+  scale: 1.045;
+}
+@keyframes pl-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.tw-planner .pl-rise {
+  animation: pl-rise 0.65s var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+@keyframes pl-bar {
+  from { transform: scaleX(0); }
+}
+.tw-planner .pl-bar {
+  transform-origin: left;
+  animation: pl-bar 1.1s var(--ease-out) both;
+  animation-delay: 220ms;
+}
+@keyframes pl-sheen {
+  to { background-position: -180% 0; }
+}
+.tw-planner .pl-sheen {
+  background: linear-gradient(90deg, var(--pl-surface-2) 0%, color-mix(in oklab, var(--pl-surface-2), var(--pl-accent) 14%) 45%, var(--pl-surface-2) 90%);
+  background-size: 220% 100%;
+  animation: pl-sheen 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tw-planner .pl-rise,
+  .tw-planner .pl-bar,
+  .tw-planner .pl-sheen,
+  .tw-planner .pl-photo img {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 @media print {
   .no-print {
     display: none !important;

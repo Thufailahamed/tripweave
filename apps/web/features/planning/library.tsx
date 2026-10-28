@@ -1,0 +1,47 @@
+"use client";
+import { createLibrary } from "@openuidev/react-lang";
+import { planningComponentGroups } from "@tripweave/planning-contract";
+import { QuickActions } from "./components/actions";
+import { BudgetMeter } from "./components/budget";
+import { PlanningCanvas } from "./components/canvas";
+import { ClarificationForm } from "./components/clarification";
+import { CostBreakdown } from "./components/costs";
+import { TripHero } from "./components/hero";
+import { HotelCard, HotelComparison } from "./components/hotels";
+import { PackageComparison, PackageSummary, RecommendationExplanation } from "./components/packages";
+import { TripRequirementSummary } from "./components/requirements";
+import { RouteSummary } from "./components/routes";
+import { DestinationTimeline } from "./components/timeline";
+
+type PlanningLibrary = ReturnType<typeof createLibrary>;
+let cached: PlanningLibrary | null = null;
+
+/**
+ * Created lazily for the same reason as the shared contract: createLibrary mints an id, and module
+ * evaluation can happen before a Cloudflare Worker request context is available. The component
+ * definitions themselves are static and safe at module scope.
+ */
+export function getPlanningLibrary(): PlanningLibrary {
+  cached ??= createLibrary({
+    id: "tripweave-planning",
+    root: "PlanningCanvas",
+    components: [
+      PlanningCanvas,
+      TripHero,
+      TripRequirementSummary,
+      ClarificationForm,
+      DestinationTimeline,
+      HotelCard,
+      HotelComparison,
+      PackageSummary,
+      PackageComparison,
+      BudgetMeter,
+      CostBreakdown,
+      RouteSummary,
+      RecommendationExplanation,
+      QuickActions,
+    ],
+    componentGroups: planningComponentGroups,
+  });
+  return cached;
+}

@@ -7,7 +7,7 @@ Browser ──► Next.js Worker (apps/web) ──/api/*──► Hono API Worke
                                                      │  ├─ D1  (authoritative data, migrations/)
                                                      │  ├─ R2  (hotel images, quotation PDFs)
                                                      │  ├─ Queue "jobs" ──► consumer ──► Workflow "optimisation"
-                                                     │  ├─ Workers AI (requirement extraction; rules fallback)
+                                                     │  ├─ Workers AI via AI Gateway (requirement extraction + planning; rules fallback)
                                                      │  ├─ Cron (hourly / daily maintenance)
                                                      │  └─ adapters: Hotelbeds, Amadeus, Google Routes / OSRM, email (Resend)
 ```
@@ -21,7 +21,7 @@ Browser ──► Next.js Worker (apps/web) ──/api/*──► Hono API Worke
 | `packages/itinerary-engine` | Overnight-stop modelling, validation (gaps, detours, unrealistic legs), reorder, suggestion, gazetteer, labelled route estimates. |
 | `packages/optimisation-engine` | Hard-constraint filtering, scoring, bounded **beam search**, diversity selection, infeasibility analysis, manual-selection evaluation, grounded explanations. No Cloudflare/HTTP dependencies. |
 | `packages/provider-contracts` | `HotelProvider` interface, normalised offers, internal inventory provider, Hotelbeds + Amadeus adapters, mock provider, retry/timeout/concurrency helpers, multi-provider search. |
-| `packages/ai` | Requirement parser (Workers AI / external LLM / deterministic rules), clarifying questions, grounding guards, explanation polishing. |
+| `packages/ai` | Requirement parser (Workers AI via AI Gateway / external LLM / deterministic rules), clarifying questions, grounding guards, explanation polishing, OpenUI planning prompt/streaming. |
 | `packages/proposal-renderer` | Client-view allow-list (`toClientView`), PDF (pdf-lib, Workers-compatible) and HTML renderers. |
 | `packages/database` | D1 repositories (tenant-scoped SQL), clock injection, node:sqlite D1 emulation for tests. |
 | `migrations/` | D1 migrations (SQLite SQL, STRICT tables, FKs, indexes). |

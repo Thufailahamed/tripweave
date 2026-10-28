@@ -10,6 +10,14 @@ ENVIRONMENT=development
 # Also include google_hotels in HOTEL_EXTERNAL_PROVIDER and enable it in Settings → Integrations.
 # Optional: minutes a live supplier price check remains quotable (default 15).
 # PRICE_VALIDITY_MINUTES=15
+# Workers AI is bound in wrangler.jsonc with remote: true and routed through AI Gateway "default".
+# Local `wrangler dev` therefore needs `wrangler login`; no API key is required for Workers AI.
+# Optional external OpenAI-compatible provider (e.g. Cloudflare AI Gateway REST endpoint):
+# LLM_PROVIDER=cloudflare
+# LLM_API_KEY=your-cloudflare-api-token
+# LLM_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast
+# LLM_BASE_URL=https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1
+# LLM_GATEWAY_ID=default
 # OpenStreetMap discovery is controlled by HOTEL_DISCOVERY=true in wrangler.jsonc.
 # Set OSM_CONTACT_EMAIL to a real contact address in production (used in the User-Agent).
 # GOOGLE_MAPS_API_KEY=

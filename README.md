@@ -29,13 +29,13 @@ pnpm --filter @tripweave/api exec wrangler d1 execute tripweave --local --persis
 
 See [docs/admin-portal.md](docs/admin-portal.md) for the full portal, security model and settings enforcement.
 
-- Workers AI has no local emulation, so local requirement extraction uses the deterministic rule parser (clearly labelled "rules" in the UI). Test Workers AI with `wrangler dev --remote`.
+- Workers AI is bound in `apps/api/wrangler.jsonc` with `remote: true` and routed through Cloudflare AI Gateway `default`. Local `wrangler dev` needs `wrangler login` and uses the real Workers AI binding while D1/R2/Queues stay local. If the binding is unavailable, extraction and planning fall back to deterministic rules.
 - Without Hotelbeds or Amadeus credentials only company-managed inventory is searched (for local runs set `HOTEL_EXTERNAL_PROVIDER=hotelbeds,amadeus` in `.dev.vars` alongside the keys); enable the labelled mock provider in *Settings → Integrations* to see supplier-failure handling.
 
 ## Verify
 
 ```bash
-pnpm test                    # 227 unit/integration/e2e tests (real migrations on SQLite, no live suppliers)
+pnpm test                    # 280 unit/integration/e2e tests (real migrations on SQLite, no live suppliers)
 pnpm typecheck               # all packages, API and web
 node scripts/ui-smoke.mjs     # headless-Chromium UI smoke (needs playwright-core + a running web app and the seeded API)
 node scripts/admin-ui-smoke.mjs # headless-Chromium pass over every platform-admin section (requires a seeded admin)
@@ -52,6 +52,7 @@ node scripts/smoke.mjs       # end-to-end against a RUNNING API (local or deploy
 | [docs/security.md](docs/security.md) | Auth, tenancy, public links, edge configuration, gaps |
 | [docs/d1-scaling.md](docs/d1-scaling.md) | D1 limits and the growth plan |
 | [docs/frontend-conventions.md](docs/frontend-conventions.md) | UI rules |
+| [docs/openui-integration.md](docs/openui-integration.md) | OpenUI generative planning assistant: allowlist, server authority, streaming, validation and fallback |
 | [docs/status.md](docs/status.md) | Phase report: what is implemented, what is not, credentials/approvals needed |
 
 ## Credentials and approvals you must obtain

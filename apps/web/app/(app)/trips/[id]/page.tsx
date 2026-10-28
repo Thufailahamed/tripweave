@@ -1,23 +1,29 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, CheckCircle2, Circle, FileText, Layers, ListChecks, Map, Route, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { MEAL_PLAN_LABELS, type MealPlan } from "@tripweave/shared";
-import { Alert, Badge, Card, CardContent, CardDescription, CardHeader, CardTitle, EmptyState, ErrorState, IconTile, LoadingBlock, PageHeader, StatusBadge } from "@/components/ui/card";
-import { IMAGES } from "@/features/marketing/imagery";
+import { Alert, Badge, Card, CardContent, CardDescription, CardHeader, CardTitle, EmptyState, ErrorState, IconTile, LoadingBlock, StatusBadge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Field, Select } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/overlay";
+import { DestinationPhoto } from "@/features/planning/components/destination-photo";
+import { TripCover } from "@/features/trips/trip-cover";
 import { ApiError, apiPatch, errorMessage } from "@/lib/api";
 import { useCan } from "@/lib/session";
 import { dateRange, formatDate, formatDateTime, money, nightsLabel, titleCase } from "@/lib/utils";
 import { stageLabel, tripKeys, useTrip } from "@/features/trips/hooks";
 import { ParsePanel } from "@/features/trips/parse-panel";
 import { tripToForm, TripFormFields, validateTripForm, type TripFormState } from "@/features/trips/trip-form";
-import { BUDGET_SCOPE_LABELS, TRIP_STATUSES, type Trip, type TripDetail } from "@/features/trips/types";
+import { BUDGET_SCOPE_LABELS, type Trip, type TripDetail } from "@/features/trips/types";
+
+const PlanningPanel = dynamic(() => import("@/features/planning/planning-panel").then((module) => module.PlanningPanel), {
+  ssr: false,
+  loading: () => <LoadingBlock label="Loading AI planner" />,
+});
 
 function Item({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -69,14 +75,14 @@ function Step({ n, icon: Icon, title, state, text, href, cta, disabled }: { n: n
     >
       <span aria-hidden className={`absolute inset-x-0 top-0 h-px ${state === "done" ? "bg-success/60" : state === "current" ? "bg-accent" : "bg-transparent"}`} />
       <div className="flex items-start justify-between gap-3">
-        <span aria-hidden className={`tw-num text-5xl font-semibold leading-none tracking-[-0.08em] text-transparent [-webkit-text-stroke:1px_color-mix(in_oklab,var(--foreground)_22%,transparent)] ${state === "current" ? "[-webkit-text-stroke:1px_var(--accent)]" : ""}`}>
+        <span aria-hidden className={`tw-trip-display tw-num text-6xl leading-none tracking-[-0.04em] text-transparent [-webkit-text-stroke:1px_color-mix(in_oklab,var(--foreground)_22%,transparent)] ${state === "current" ? "[-webkit-text-stroke:1px_var(--accent)]" : ""}`}>
           {String(n).padStart(2, "0")}
         </span>
         <IconTile icon={Icon} tone={state === "done" ? "success" : state === "current" ? "accent" : "primary"} size="md" />
       </div>
       <div className="flex items-center gap-2">
         {state === "done" ? <CheckCircle2 className="size-4 text-success" aria-label="Done" /> : <Circle className={`size-4 ${state === "current" ? "text-accent" : "text-muted-foreground"}`} aria-label={state === "current" ? "Next step" : "To do"} />}
-        <p className="text-base font-semibold tracking-[-0.03em]">{title}</p>
+        <p className="tw-trip-display text-[1.45rem] leading-none">{title}</p>
         {state === "current" ? <span className="ml-auto rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">Next</span> : null}
       </div>
       <p className="flex-1 text-xs leading-relaxed text-muted-foreground">{text}</p>
@@ -106,7 +112,12 @@ function Overview({ detail }: { detail: TripDetail }) {
   return (
     <div className="flex flex-col gap-6">
       <section aria-labelledby="steps-h">
-        <h2 id="steps-h" className="tw-eyebrow mb-4">Next steps</h2>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+          <h2 id="steps-h" className="tw-trip-display text-[2rem] leading-none">
+            Next steps
+          </h2>
+          <p className="text-[11px] text-muted-foreground">The shortest path from enquiry to quotation</p>
+        </div>
         <ol className="grid gap-4 md:grid-cols-3">
           <Step
             n={1}
@@ -184,11 +195,14 @@ function Overview({ detail }: { detail: TripDetail }) {
               {itinerary ? (
                 <ol className="flex flex-col gap-1.5 text-sm">
                   {itinerary.stops.map((s) => (
-                    <li key={s.id} className="flex justify-between gap-2">
-                      <span className="font-semibold">
-                        {s.sequence}. {s.destination}
+                    <li key={s.id} className="flex items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <DestinationPhoto destination={s.destination} className="size-8 shrink-0 rounded-lg" />
+                        <span className="truncate font-semibold">
+                          {s.sequence}. {s.destination}
+                        </span>
                       </span>
-                      <span className="tw-num text-muted-foreground">
+                      <span className="tw-num shrink-0 text-muted-foreground">
                         {formatDate(s.arrivalDate, { day: "numeric", month: "short" })} · {nightsLabel(s.nights)}
                       </span>
                     </li>
@@ -267,38 +281,6 @@ function EditRequirements({ trip }: { trip: Trip }) {
   );
 }
 
-function StatusControl({ trip }: { trip: Trip }) {
-  const qc = useQueryClient();
-  const can = useCan();
-  const [status, setStatus] = React.useState(trip.status);
-  React.useEffect(() => setStatus(trip.status), [trip.status]);
-  const save = useMutation({
-    mutationFn: () => apiPatch<Trip>(`/trips/${trip.id}`, { status }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: tripKeys.all });
-      toast.success("Status updated");
-    },
-    onError: (e) => toast.error(errorMessage(e)),
-  });
-  if (!can("trips:write")) return null;
-  return (
-    <div className="flex items-end gap-2">
-      <Field label="Set status" htmlFor="trip-status-set">
-        <Select id="trip-status-set" value={status} onChange={(e) => setStatus(e.target.value)} className="w-44">
-          {TRIP_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {titleCase(s)}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Button variant="outline" disabled={status === trip.status} loading={save.isPending} onClick={() => save.mutate()}>
-        Apply
-      </Button>
-    </div>
-  );
-}
-
 export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>();
   const q = useTrip(id);
@@ -312,30 +294,18 @@ export default function TripDetailPage() {
   const { trip } = d;
 
   return (
-    <div>
-      <PageHeader
-        eyebrow={<Link href="/trips" className="hover:underline">Trip requests</Link>}
-        title={trip.title}
-        icon={Map}
-        image={IMAGES.hero}
-        description={
-          <span className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={trip.status} />
-            {trip.customerId ? <Link href={`/customers/${trip.customerId}`} className="font-semibold text-primary hover:underline">{trip.customerName ?? "Customer"}</Link> : <span>No customer</span>}
-            <span className="tw-num">· {dateRange(trip.arrivalDate, trip.departureDate)}</span>
-          </span>
-        }
-        actions={<StatusControl trip={trip} />}
-      />
-      <Tabs defaultValue="overview">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="requirements">Requirements</TabsTrigger>
-          <TabsTrigger value="parse">
+    <div className="tw-trip p-3 sm:p-5 lg:p-7">
+      <TripCover trip={trip} itinerary={d.itinerary} quoteCount={d.quotes.length} />
+      <Tabs defaultValue="overview" className="mt-7">
+        <TabsList className="mb-6 w-full justify-start gap-0 overflow-x-auto rounded-none border-x-0 border-t-0 border-b border-border bg-transparent p-0">
+          <TabsTrigger className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-[13px] data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-foreground sm:px-4" value="overview">Overview</TabsTrigger>
+          <TabsTrigger className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-[13px] data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-foreground sm:px-4" value="requirements">Requirements</TabsTrigger>
+          <TabsTrigger className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-[13px] data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-foreground sm:px-4" value="parse">
             Enquiry extraction {trip.parseResult?.parsed?.clarifyingQuestions?.length ? <Badge tone="warning" className="ml-1">{trip.parseResult.parsed.clarifyingQuestions.length}</Badge> : null}
           </TabsTrigger>
-          <TabsTrigger value="quotes">Quotes ({d.quotes.length})</TabsTrigger>
-          <TabsTrigger value="history">Status history</TabsTrigger>
+          <TabsTrigger className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-[13px] data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-foreground sm:px-4" value="planning">AI planner</TabsTrigger>
+          <TabsTrigger className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-[13px] data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-foreground sm:px-4" value="quotes">Quotes ({d.quotes.length})</TabsTrigger>
+          <TabsTrigger className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-[13px] data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-foreground sm:px-4" value="history">Status history</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">
           <Overview detail={d} />
@@ -345,6 +315,9 @@ export default function TripDetailPage() {
         </TabsContent>
         <TabsContent value="parse">
           <ParsePanel trip={trip} />
+        </TabsContent>
+        <TabsContent value="planning">
+          <PlanningPanel tripId={trip.id} />
         </TabsContent>
         <TabsContent value="quotes">
           {d.quotes.length === 0 ? (

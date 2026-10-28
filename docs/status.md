@@ -14,20 +14,23 @@ Covers roadmap phases 1–7 of the master prompt. "Verified" means executed in t
 
 **Phase 5 – Quotations.** Versioned immutable snapshots, FX snapshot per version, optimistic concurrency, lifecycle with enforced transitions, maker-checker approval, secure share links bound to versions, client acceptance, branded PDF (pdf-lib on Workers) stored in R2, allow-listed client view, mobile-first public page.
 
-**Phase 6 – Hardening.** 227 automated tests; security/tenant/abuse tests; supplier-failure tests; browser smoke test; docs.
+**Phase 6 – Hardening.** 280 automated tests; security/tenant/abuse tests; supplier-failure tests; browser smoke test; docs.
 
 **Phase 7 – Platform administration.** Dedicated `/admin` portal: platform overview with growth/activity/health alerts; organisation directory, creation, profile/status/subscription/team management; global user directory with account lifecycle, platform-role, membership, session, MFA and password-reset controls; optimisation job browser with cancel/retry; platform-wide audit log with tenant-metadata redaction; announcements and app-shell banner; email outbox with resend; provider/API/AI/sync telemetry; time-boxed support grants with immediate revocation; platform settings enforced server-side (sign-ups, maintenance mode, default limits, banner); manual maintenance runs; database footprint and integration status. `docs/admin-portal.md` documents the security model.
+
+**Phase 8 – OpenUI planning assistant.** A finite, shared component allowlist; server-built, permission-filtered snapshots of the trip, itinerary, hotel offers and package pricing; provider-independent streaming generation; strict parser/ID/action validation; structured clarification forms; deterministic fallback and standard shadcn view; tenant, margin and role tests. `docs/openui-integration.md` documents the authority boundary, allowlist and verification.
 
 ## Verification performed
 | Check | Result |
 |---|---|
-| `pnpm test` — 26 files, 227 tests (pricing, itinerary, optimiser, providers incl. Amadeus, AI, renderer incl. Unicode PDF, D1 repositories, API e2e, security, MFA/email verification, XLSX import, platform admin) on real migrations over SQLite | pass |
+| `pnpm test` — 34 files, 280 tests (pricing, itinerary, optimiser, providers incl. Amadeus, AI, OpenUI planning, renderer incl. Unicode PDF, D1 repositories, API e2e, security, MFA/email verification, XLSX import, platform admin) on real migrations over SQLite | pass |
 | Migration 0006 applied with `wrangler d1 migrations apply --local` (real D1 runtime); `wrangler deploy --dry-run` bundles the Worker (4.7 MB, 1.6 MB gzip, within the 3 MB free-plan limit); `next build` passes | pass |
 | Sample Sinhala/Tamil/Cyrillic/Greek quotation PDF rendered with pdf.js and inspected by eye | pass (see below) |
 | `pnpm typecheck` (strict TS, all packages + API + web) | pass |
 | Migrations applied with `wrangler d1 migrations apply --local` (real D1 runtime) | pass |
 | `wrangler dev` (workerd; D1/R2/KV/Queue/Workflow local) + `scripts/smoke.mjs`: register → hotels → optimise via Queue→Workflow → quote → public link → PDF → client accept | pass |
 | `next build` (40 routes) and `vite build` (vinext, Cloudflare Worker) | pass |
+| Live Workers AI through AI Gateway `default` (Gemma 4 26B A4B); editorial planner and trip-dossier page in light, dark and mobile | pass (TripHero, destination photography, package tabs, budget meter, photographic trip cover, underline tabs; no fallback, no console/5xx errors) |
 | Built Worker under local workerd + `scripts/ui-smoke.mjs` (headless Chromium): all pages, trip→packages, quote, mobile public page, signed-out redirect, no console/API errors | pass |
 | Deployment to Cloudflare | **not performed** |
 

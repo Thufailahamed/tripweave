@@ -60,9 +60,11 @@ See `apps/web/README.md` for the verified Next.js-on-Workers path and commands u
 | | development | staging | production |
 |---|---|---|---|
 | D1 / R2 / KV / Queue | local (Miniflare) | `*-staging` | `*-production` |
-| Workers AI | rules fallback (no local AI) | binding `AI` | binding `AI` |
+| Workers AI | binding `AI` (`remote: true`) via AI Gateway `default` | binding `AI` via AI Gateway `default` | binding `AI` via AI Gateway `default` |
 | Mock provider | allowed | allowed | **disabled** |
 | Cookie | `tw_session` | `__Host-tw_session` (Secure) | `__Host-tw_session` (Secure) |
+
+Workers AI requests are routed through AI Gateway `default` (`AI_GATEWAY_ID` in `wrangler.jsonc`). The gateway is in the same account as the Worker; the first authenticated Workers AI request can create `default`, or create a named gateway in **AI → AI Gateway** and set `AI_GATEWAY_ID` accordingly. Local `wrangler dev` uses the AI binding in `remote: true` mode, so it needs `wrangler login`; D1/R2/Queues remain local. If the binding is unavailable, both enquiry extraction and the planning assistant fall back to deterministic rules.
 
 ## Honest status
 Deployment to a real Cloudflare account was **not performed** from this repository's build environment (no account credentials). Everything marked "verified" in `docs/status.md` was verified locally under `wrangler dev` (workerd, local D1/R2/KV/Queue/Workflow) and by the automated test suite.

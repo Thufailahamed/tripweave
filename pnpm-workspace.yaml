@@ -6,3 +6,8 @@ allowBuilds:
   workerd: true
   sharp: true
   unrs-resolver: true
+  '@openuidev/lang-core': false
+minimumReleaseAgeExclude:
+  - '@openuidev/devtools@0.3.1'
+  - '@openuidev/lang-core@1.0.2'
+  - '@openuidev/react-lang@1.0.2'

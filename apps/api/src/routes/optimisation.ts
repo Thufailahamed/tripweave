@@ -9,10 +9,11 @@ import type { Env, Vars } from "../env";
 import { ok, parseBody, parseQuery, requireParam, type AppContext } from "../lib/http";
 import { audit, can, getTenant, rateLimit, requirePermission, requireTenant } from "../middleware/auth";
 import { createOptimisationJob, dbOfferId, dispatchJob, loadJobSearchInput, persistOffers, recheckOffer, toNewPackage, type PipelineCtx } from "../services/optimisation";
-import { presentPackage, priceStoredPackage, redactOfferCosts, type StoredPackage } from "../services/pricing";
+import { presentPackageList } from "../services/package-presentation";
+import { redactOfferCosts, type StoredPackage } from "../services/pricing";
 import { validatePackagePrices, PRICE_VALIDITY_MINUTES } from "../services/price-validation";
 import { sellFromCost } from "@tripweave/pricing-engine";
-import { enabledExternalProviders, loadIntegrations, loadPricing, requireFx } from "../services/settings";
+import { enabledExternalProviders, loadIntegrations } from "../services/settings";
 
 export const optimisationRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
 optimisationRoutes.use("*", requireTenant);
@@ -80,38 +81,6 @@ optimisationRoutes.post("/optimisations/:id/cancel", requirePermission("optimisa
 
 /* ---------- packages ---------- */
 
-async function presentList(c: AppContext, records: trips.PackageRecord[]) {
-  const a = getTenant(c);
-  const db = c.get("db");
-  const pricing = await loadPricing(db, a.organizationId);
-  const rights = { canSeeMargins: a.permissions.has("margins:view"), canSeeContracts: a.permissions.has("agreements:manage") };
-  const propertyIds = records.flatMap((r) => {
-    const pkg = r.package as unknown as StoredPackage;
-    return pkg.selections.map((s) => s.offer.property.id);
-  });
-  const coverImages = await inventory.firstImagesFor(db, [...new Set(propertyIds)]);
-  return Promise.all(
-    records.map(async (r) => {
-      let priced = null;
-      try {
-        const pkg = r.package as unknown as StoredPackage;
-        const fx = await requireFx(db, a.organizationId, pkg.selections.map((s) => s.offer.currency).concat(pkg.currency));
-        priced = priceStoredPackage(pkg, pkg.currency, fx, pricing);
-      } catch {
-        priced = null; // surfaced to the UI as "pricing unavailable"; the cost data is still shown
-      }
-      const shown = presentPackage(r, rights, priced);
-      return {
-        ...shown,
-        package: {
-          ...shown.package,
-          selections: shown.package.selections.map((s) => ({ ...s, coverImageId: coverImages.get(s.offer.property.id) ?? null })),
-        },
-      };
-    }),
-  );
-}
-
 optimisationRoutes.get("/trips/:id/packages", requirePermission("trips:read"), async (c) => {
   const a = getTenant(c);
   const tripId = requireParam(c, "id");
@@ -121,13 +90,13 @@ optimisationRoutes.get("/trips/:id/packages", requirePermission("trips:read"), a
   if (!job || job.tripRequestId !== tripId) return ok(c, { job: null, packages: [] });
   const recs = job.status === "succeeded" ? await trips.listJobPackages(c.get("db"), a.organizationId, job.id) : [];
   const summary = (job.resultSummary ?? {}) as Record<string, unknown>;
-  return ok(c, { job: { id: job.id, status: job.status, completedAt: job.completedAt, infeasible: summary.infeasible ?? null, omittedObjectives: summary.omittedObjectives ?? [], warnings: summary.warnings ?? [], notes: summary.notes ?? [], funnel: summary.funnel ?? [], providers: summary.providers ?? [] }, packages: await presentList(c, recs) });
+  return ok(c, { job: { id: job.id, status: job.status, completedAt: job.completedAt, infeasible: summary.infeasible ?? null, omittedObjectives: summary.omittedObjectives ?? [], warnings: summary.warnings ?? [], notes: summary.notes ?? [], funnel: summary.funnel ?? [], providers: summary.providers ?? [] }, packages: await presentPackageList(c, recs) });
 });
 
 optimisationRoutes.get("/packages/:id", requirePermission("trips:read"), async (c) => {
   const rec = await trips.getPackage(c.get("db"), getTenant(c).organizationId, requireParam(c, "id"));
   if (!rec) throw new AppError("not_found", "Package not found");
-  return ok(c, (await presentList(c, [rec]))[0]);
+  return ok(c, (await presentPackageList(c, [rec]))[0]);
 });
 
 /** Hotels that could replace the one at `stopId` while still satisfying every hard constraint. */
@@ -184,7 +153,7 @@ optimisationRoutes.post("/packages/:id/hotels", requirePermission("packages:writ
   const [id] = await trips.insertPackages(db, a.organizationId, [toNewPackage(rec.jobId, await trips.nextCombinationNumber(db, rec.jobId), result.package, ctx.stops, { parentId: rec.id, manuallyModified: true, verification: { unverified: result.package.unverified, replacedStop: body.stopId } })]);
   await audit(c, "package.hotel_replaced", "package", id ?? null, { from: rec.id, stopId: body.stopId, offerId: body.offerId });
   const saved = await trips.getPackage(db, a.organizationId, id!);
-  return ok(c, (await presentList(c, [saved!]))[0], 201);
+  return ok(c, (await presentPackageList(c, [saved!]))[0], 201);
 });
 
 optimisationRoutes.post("/packages/:id/reprice", requirePermission("packages:write"), async (c) => {
@@ -221,7 +190,7 @@ optimisationRoutes.post("/packages/:id/reprice", requirePermission("packages:wri
   const saved = await trips.getPackage(db, a.organizationId, id!);
   const margins = can(c, "margins:view");
   return ok(c, {
-    package: (await presentList(c, [saved!]))[0],
+    package: (await presentPackageList(c, [saved!]))[0],
     changes: margins ? changes : changes.map((x) => ({ stopId: x.stopId, offerId: x.offerId, status: x.status, message: x.message, previousTotalMinor: undefined, currentTotalMinor: undefined })),
     valid: result.ok, violations: result.violations,
     previousTotalMinor: margins ? rec.totalCostMinor : undefined, newTotalMinor: margins ? result.package.totalCostMinor : undefined,
@@ -233,7 +202,7 @@ optimisationRoutes.post("/packages/:id/validate", requirePermission("packages:wr
   const id = requireParam(c, "id");
   const result = await validatePackagePrices(pctx(c), a.organizationId, id, { validityMinutes: Number(c.env.PRICE_VALIDITY_MINUTES ?? 15) });
   await audit(c, "package.price_validated", "package", id, { status: result.verification.status, allVerified: result.verification.allVerified, changed: result.changed });
-  const [shown] = await presentList(c, [result.rec]);
+  const [shown] = await presentPackageList(c, [result.rec]);
   const margins = can(c, "margins:view");
   const verification = margins
     ? result.verification

@@ -1,11 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { Caveat, Inter, Instrument_Serif, Plus_Jakarta_Sans } from "next/font/google";
 import Script from "next/script";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"], variable: "--font-inter", display: "swap" });
 const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-jakarta", display: "swap" });
+// Generated planning interfaces read like a printed travel journal: a high-contrast serif for display
+// type and a handwritten face for the assistant's asides. Both are self-hosted by next/font.
+const instrument = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-instrument", display: "swap" });
+const caveat = Caveat({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-caveat", display: "swap" });
 
 export const metadata: Metadata = {
   title: { default: "TripWeave – Tour planning & quotation platform", template: "%s · TripWeave" },
@@ -19,7 +23,7 @@ const BOOT = `if(!window.__twBoot){window.__twBoot=1;document.documentElement.cl
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jakarta.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${jakarta.variable} ${instrument.variable} ${caveat.variable}`} suppressHydrationWarning>
       <body>
         {/* Enables reveal-on-scroll hidden states (content stays visible without JS) and plays the landing intro once per session. */}
         <Script id="tw-boot" strategy="beforeInteractive">

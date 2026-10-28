@@ -97,7 +97,7 @@ function TripsInner() {
           const t = row.original;
           const destinations = t.parseResult?.parsed?.destinations ?? [];
           return (
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-[240px] items-center gap-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-accent-soft text-[11px] font-semibold text-accent" aria-hidden>
                 {initialsOf(t.customerName || t.title)}
               </span>

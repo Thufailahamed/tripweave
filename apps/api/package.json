@@ -17,10 +17,12 @@
     "deploy:production": "wrangler deploy --env production"
   },
   "dependencies": {
+    "@openuidev/lang-core": "1.0.2",
     "@tripweave/ai": "workspace:*",
     "@tripweave/database": "workspace:*",
     "@tripweave/itinerary-engine": "workspace:*",
     "@tripweave/optimisation-engine": "workspace:*",
+    "@tripweave/planning-contract": "workspace:*",
     "@tripweave/pricing-engine": "workspace:*",
     "@tripweave/proposal-renderer": "workspace:*",
     "@tripweave/provider-contracts": "workspace:*",
