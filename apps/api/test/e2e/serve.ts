@@ -101,6 +101,37 @@ interface Payload {
   repairNote?: unknown;
 }
 
+/** Package presentation contexts carry a `run` block; they have no user request. */
+interface PackagePayload {
+  context: {
+    run: unknown;
+    packages: { id: string; objective: string; liveChecked: boolean }[];
+    offers: { offerId: string; packageIds: string[] }[];
+  };
+  repairNote?: unknown;
+}
+
+/**
+ * A package presentation built only from the refs in CONTEXT: the first package leads, the others are
+ * compared, the first package's first hotel is shown and the reader gets next steps.
+ */
+function packageProgramFor(context: PackagePayload["context"]): string {
+  const lead = context.packages[0]!;
+  const refs = context.packages.map((pkg) => JSON.stringify(pkg.id));
+  const stay = context.offers.find((offer) => offer.packageIds.includes(lead.id));
+  const blocks = ["lead", "card", ...(context.packages.length > 1 ? ["compare"] : []), "live", "insight", ...(stay ? ["stay"] : []), "next"];
+  const lines = [
+    `root = PackageShowcase("Your Kandy and Ella packages", [${blocks.join(", ")}], "The first option balances budget, location and reviews best.", "two good options")`,
+    `lead = Lead("The first option balances the budget with the strongest stays; the others trade value for comfort.")`,
+    `card = PackageCard(${JSON.stringify(lead.id)}, "lead")`,
+  ];
+  if (context.packages.length > 1) lines.push(`compare = PackageCompare([${refs.join(", ")}], "Side by side")`);
+  lines.push(`live = LivePriceStatus(${JSON.stringify(lead.id)})`, `insight = PackageInsight(${JSON.stringify(lead.id)})`);
+  if (stay) lines.push(`stay = HotelStay(${JSON.stringify(stay.offerId)}, ${JSON.stringify(lead.id)})`);
+  lines.push("next = NextSteps()");
+  return lines.join("\n");
+}
+
 
 /** Programs the scripted model writes. Each one uses only the approved components and snapshot refs. */
 function programFor(request: string, context: Payload["context"]): string {
@@ -181,7 +212,15 @@ const scriptedModel: LlmClient = {
   model: "scripted-e2e",
   extract: async () => ({}),
   async *stream(args: LlmTextArgs) {
-    const payload = JSON.parse(args.user) as Payload;
+    const parsed = JSON.parse(args.user) as Payload | PackagePayload;
+    if ("run" in parsed.context) {
+      for (const line of packageProgramFor(parsed.context as PackagePayload["context"]).split("\n")) {
+        yield `${line}\n`;
+        await new Promise((resolve) => setTimeout(resolve, 12));
+      }
+      return;
+    }
+    const payload = parsed as Payload;
     const request = payload.userRequest;
     if (/\[fail-always\]/i.test(request) || (/\[fail-once\]/i.test(request) && !payload.repairNote)) {
       yield `root = PlanningCanvas("Broken", [block])\nblock = Evil("unknown component")`;

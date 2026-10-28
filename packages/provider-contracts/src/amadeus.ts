@@ -182,7 +182,10 @@ export class AmadeusProvider implements HotelProvider {
     const taxesIncluded = taxes.length === 0 ? null : taxes.every((t) => t.included === true) ? true : taxes.some((t) => t.included === false) ? false : null;
     const notIncludedMinor = taxes.filter((t) => t.included === false && (!t.currency || t.currency === currency)).length ? safeSum(taxes.filter((t) => t.included === false && (!t.currency || t.currency === currency)).map((t) => t.amount), currency) : null;
 
-    const nightly = this.nightlyRates(price, checkIn, checkOut, perRoomMinor, rooms, currency);
+    // Taxes the supplier lists as not included are payable on top of the base price, so they are part of the cost.
+    const notIncludedTotalMinor = notIncludedMinor === null ? 0 : notIncludedMinor * rooms;
+    const payableTaxesIncluded = taxesIncluded === false ? (notIncludedMinor === null ? null : true) : taxesIncluded;
+    const nightly = this.withSharedTax(this.nightlyRates(price, checkIn, checkOut, perRoomMinor, rooms, currency), notIncludedTotalMinor);
     const cancellation = this.cancellation(o.policies?.cancellations ?? [], currency);
     const retrievedAt = (this.cfg.now?.() ?? new Date()).toISOString();
     const roomName = o.room?.description?.text?.split("\n")[0]?.trim() || o.room?.typeEstimated?.category?.replace(/_/g, " ") || o.room?.type || "Room";
@@ -193,8 +196,8 @@ export class AmadeusProvider implements HotelProvider {
       property: { id: hotelId, name: entry.hotel?.name ?? meta?.name ?? hotelId, destination, latitude: meta?.geoCode?.latitude ?? null, longitude: meta?.geoCode?.longitude ?? null, category: null, starRating: null, reviewScore: null, amenities: [], ownerOrganizationId: null },
       roomType: { id: null, name: roomName, maxOccupancy: adults + (o.guests?.childAges?.length ?? 0), maxAdults: adults },
       stayStart: checkIn, stayEnd: checkOut, nights, mealPlan: BOARD[o.boardType ?? "ROOM_ONLY"] ?? "RO",
-      roomsRequired: rooms, occupancy: input.party, totalAmountMinor: perRoomMinor * rooms, currency,
-      taxAmountMinor: taxMinor === null ? null : taxMinor * rooms, feeAmountMinor: null, taxesIncluded,
+      roomsRequired: rooms, occupancy: input.party, totalAmountMinor: perRoomMinor * rooms + notIncludedTotalMinor, currency,
+      taxAmountMinor: taxMinor === null ? null : taxMinor * rooms, feeAmountMinor: null, taxesIncluded: payableTaxesIncluded,
       ...(nightly ? { nightlyRates: nightly } : {}),
       cancellation,
       payment: { type: PAYMENT[o.policies?.paymentType ?? ""] ?? "unknown" },
@@ -208,6 +211,14 @@ export class AmadeusProvider implements HotelProvider {
   }
 
   /** Per-night rates are only exposed when they reconcile exactly with the stay total. */
+  /** Spreads an extra amount over the nights so the nightly figures still add up to the stay total. */
+  private withSharedTax(nightly: NormalisedOffer["nightlyRates"] | null, extraMinor: number): NormalisedOffer["nightlyRates"] | null {
+    if (!nightly || extraMinor === 0 || nightly.length === 0) return nightly;
+    const share = Math.floor(extraMinor / nightly.length);
+    const remainder = extraMinor - share * nightly.length;
+    return nightly.map((night, index) => ({ ...night, amountMinor: night.amountMinor + share + (index === nightly.length - 1 ? remainder : 0) }));
+  }
+
   private nightlyRates(price: AmPrice | undefined, checkIn: string, checkOut: string, perRoomMinor: number, rooms: number, currency: string): NormalisedOffer["nightlyRates"] | null {
     const changes = price?.variations?.changes;
     if (!changes?.length) return null;

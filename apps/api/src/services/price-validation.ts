@@ -1,8 +1,19 @@
 import { AppError, type NormalisedOffer } from "@tripweave/shared";
 import { trips } from "@tripweave/database";
+import { buildExplanation } from "@tripweave/optimisation-engine";
 import type { PriceCheckResult } from "@tripweave/provider-contracts";
 import { loadJobSearchInput, recheckOffer, type PipelineCtx } from "./optimisation";
 import type { StoredPackage } from "./pricing";
+
+/**
+ * Rebuilt from the re-priced selections so the cost sentences match the stored totals. Packages stored
+ * before the travel summary existed keep their wording, with the not-price-checked phrase updated.
+ */
+function explanationAfterRecheck(pkg: StoredPackage, existing: string[]): string[] {
+  const rewritten = (lines: string[]) => lines.map((line) => line.replace(/supplier-reported rate \(not price-checked\)/gi, "live-checked rate"));
+  if (!("travel" in pkg)) return rewritten(existing);
+  return rewritten(buildExplanation(pkg as unknown as Parameters<typeof buildExplanation>[0]).explanation);
+}
 
 export const PRICE_VALIDITY_MINUTES = 15;
 
@@ -117,17 +128,15 @@ export async function validatePackagePrices(
     checks,
   };
 
+  const updatedTotal = updated.reduce((sum, s) => sum + s.costMinor, 0);
+  const updatedNights = Math.max(1, updated.reduce((sum, s) => sum + s.offer.nights, 0));
+  const repriced: StoredPackage = { ...pkg, selections: updated, totalCostMinor: updatedTotal, costPerNightMinor: Math.round(updatedTotal / updatedNights) };
   const nextPkg: StoredPackage = allVerified
     ? {
-        ...pkg,
-        selections: updated,
-        totalCostMinor: updated.reduce((sum, s) => sum + s.costMinor, 0),
-        costPerNightMinor: Math.round(
-          updated.reduce((sum, s) => sum + s.costMinor, 0) / Math.max(1, updated.reduce((sum, s) => sum + s.offer.nights, 0)),
-        ),
+        ...repriced,
         // A live check resolves the "price not checked" warning; availability remains unknown unless a bookable supplier confirms it.
         unverified: (pkg.unverified ?? []).filter((line) => !/price has not been live-checked/i.test(line)),
-        explanation: (pkg.explanation ?? []).map((line) => line.replace(/supplier-reported rate \(not price-checked\)/gi, "live-checked rate")),
+        explanation: explanationAfterRecheck(repriced, pkg.explanation ?? []),
       }
     : pkg;
 

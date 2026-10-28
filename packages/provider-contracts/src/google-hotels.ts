@@ -8,7 +8,7 @@ import {
 } from "./google-hotels-direct";
 import { ProviderError, type HotelAvailabilityInput, type HotelProvider, type HotelSearchCache, type HotelSearchInput, type PriceCheckInput, type PriceCheckResult, type PropertySearchResult, type RoomOffer } from "./types";
 import { normalizeHotelName } from "./discovery";
-import { chooseGoogleLiveRate, parseGooglePropertyRates } from "./google-hotels-recheck";
+import { chooseGoogleLiveRate, googleAmount, parseGooglePropertyRates } from "./google-hotels-recheck";
 
 export const GOOGLE_HOTELS_PROVIDER_KEY = "google_hotels";
 
@@ -152,6 +152,8 @@ export interface GooglePriceChoice {
   totalMinor: number;
   nightlyMinor: number | null;
   freeCancellation: boolean | null;
+  /** Whether the total includes taxes and fees; null when Google does not say. */
+  taxesIncluded: boolean | null;
   allSources: { source: string; totalMinor: number }[];
 }
 
@@ -190,20 +192,23 @@ function emptyEnrichment(over: Record<string, unknown>): Record<string, unknown>
 
 /** Picks the cheapest priced source for one property and reports every source it saw. */
 export function chooseGooglePrice(p: GoogleProperty, nights: number, rooms: number): GooglePriceChoice | null {
-  const candidates: { source: string; totalMinor: number; nightlyMinor: number | null; freeCancellation: boolean | null }[] = [];
+  const candidates: { source: string; totalMinor: number; nightlyMinor: number | null; freeCancellation: boolean | null; taxesIncluded: boolean | null }[] = [];
+  const priceFrom = (total: GoogleMoney | undefined, nightlyMoney: GoogleMoney | undefined) => {
+    const stay = googleAmount(total);
+    const nightly = googleAmount(nightlyMoney);
+    if (stay) return { totalMinor: Math.round(stay.amount * 100) * rooms, taxesIncluded: stay.taxesIncluded, nightlyMinor: nightly ? Math.round(nightly.amount * 100) : null };
+    if (nightly) return { totalMinor: Math.round(nightly.amount * 100) * nights * rooms, taxesIncluded: nightly.taxesIncluded, nightlyMinor: Math.round(nightly.amount * 100) };
+    return null;
+  };
   for (const price of p.prices ?? []) {
-    const total = price.total_rate?.extracted_lowest;
-    const nightly = price.rate_per_night?.extracted_lowest ?? price.rate_per_night?.extracted_before_taxes_fees;
-    const totalMinor = total !== undefined ? Math.round(total * 100) * rooms : nightly !== undefined ? Math.round(nightly * 100) * nights * rooms : null;
-    if (totalMinor === null || totalMinor <= 0) continue;
-    candidates.push({ source: price.source?.trim() || "Google Hotels", totalMinor, nightlyMinor: nightly !== undefined ? Math.round(nightly * 100) : null, freeCancellation: price.free_cancellation ?? null });
+    const picked = priceFrom(price.total_rate, price.rate_per_night);
+    if (!picked || picked.totalMinor <= 0) continue;
+    candidates.push({ source: price.source?.trim() || "Google Hotels", totalMinor: picked.totalMinor, nightlyMinor: picked.nightlyMinor, freeCancellation: price.free_cancellation ?? null, taxesIncluded: picked.taxesIncluded });
   }
   if (candidates.length === 0) {
-    const total = p.total_rate?.extracted_lowest;
-    const nightly = p.rate_per_night?.extracted_lowest ?? p.rate_per_night?.extracted_before_taxes_fees;
-    const totalMinor = total !== undefined ? Math.round(total * 100) * rooms : nightly !== undefined ? Math.round(nightly * 100) * nights * rooms : null;
-    if (totalMinor === null || totalMinor <= 0) return null;
-    candidates.push({ source: "Google Hotels", totalMinor, nightlyMinor: nightly !== undefined ? Math.round(nightly * 100) : null, freeCancellation: null });
+    const picked = priceFrom(p.total_rate, p.rate_per_night);
+    if (!picked || picked.totalMinor <= 0) return null;
+    candidates.push({ source: "Google Hotels", totalMinor: picked.totalMinor, nightlyMinor: picked.nightlyMinor, freeCancellation: null, taxesIncluded: picked.taxesIncluded });
   }
   // Cheapest wins; a familiar OTA wins ties so the source label stays useful.
   const rank = (s: string) => (/booking\.com/i.test(s) ? 0 : /expedia/i.test(s) ? 1 : /agoda/i.test(s) ? 2 : 3);
@@ -214,6 +219,7 @@ export function chooseGooglePrice(p: GoogleProperty, nights: number, rooms: numb
     totalMinor: best.totalMinor,
     nightlyMinor: best.nightlyMinor,
     freeCancellation: best.freeCancellation,
+    taxesIncluded: best.taxesIncluded,
     allSources: candidates.map((c) => ({ source: c.source, totalMinor: c.totalMinor })),
   };
 }
@@ -378,7 +384,7 @@ export class GoogleHotelsProvider implements HotelProvider {
         currency: input.currency ?? "USD",
         taxAmountMinor: null,
         feeAmountMinor: null,
-        taxesIncluded: null,
+        taxesIncluded: choice.taxesIncluded,
         cancellation: { refundable: choice.freeCancellation, freeCancellationUntil: null },
         payment: { type: "unknown", description: "Payment terms are set by the booking site." },
         retrievedAt,

@@ -47,12 +47,26 @@ const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v =
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 const integer = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
-function totalFrom(value: unknown): { totalMinor: number; nightlyMinor: number | null } | null {
+/**
+ * The amount a Google money field gives for a stay. The after-tax-and-fee figure is the complete price, so
+ * it is preferred. The plain figure is the displayed price, whose tax basis Google does not state; it is
+ * used with the tax treatment unknown. A before-tax figure on its own is not a price the company can pay,
+ * so it is never used. Search and live checks share this rule so their prices stay comparable.
+ */
+export function googleAmount(value: unknown): { amount: number; taxesIncluded: boolean | null } | null {
   if (!isRecord(value)) return null;
-  const total = integer(value.extracted_lowest) ?? integer(value.extracted_after_taxes_fees) ?? integer(value.extracted_before_taxes_fees);
-  if (total === null || total <= 0) return null;
-  const nightly = integer(value.extracted_lowest) ?? integer(value.extracted_before_taxes_fees);
-  return { totalMinor: Math.round(total * 100), nightlyMinor: nightly !== null ? Math.round(nightly * 100) : null };
+  const after = integer(value.extracted_after_taxes_fees);
+  if (after !== null && after > 0) return { amount: after, taxesIncluded: true };
+  const lowest = integer(value.extracted_lowest);
+  if (lowest !== null && lowest > 0) return { amount: lowest, taxesIncluded: null };
+  return null;
+}
+
+function totalFrom(value: unknown): { totalMinor: number; nightlyMinor: number | null } | null {
+  const amount = googleAmount(value);
+  if (!amount) return null;
+  const nightly = integer((value as Record<string, unknown>).extracted_lowest);
+  return { totalMinor: Math.round(amount.amount * 100), nightlyMinor: nightly !== null ? Math.round(nightly * 100) : null };
 }
 
 function breakfastFromInclusions(inclusions: string[]): GoogleLiveRate["breakfast"] {

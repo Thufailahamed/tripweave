@@ -10,6 +10,7 @@ import { hotelRoutes } from "./routes/hotels";
 import { optimisationRoutes } from "./routes/optimisation";
 import { orgRoutes } from "./routes/organization";
 import { planningRoutes } from "./routes/planning";
+import { packageShowcaseRoutes } from "./routes/package-showcase";
 import { publicRoutes } from "./routes/public";
 import { quoteRoutes } from "./routes/quotes";
 import { reportRoutes } from "./routes/reports";
@@ -63,6 +64,7 @@ export function createApp(overrides: Partial<Deps> = {}) {
   v1.route("/", tripRoutes);
   v1.route("/", optimisationRoutes);
   v1.route("/", planningRoutes);
+  v1.route("/", packageShowcaseRoutes);
   v1.route("/", quoteRoutes);
   v1.route("/", reportRoutes);
   app.route("/api/v1", v1);
