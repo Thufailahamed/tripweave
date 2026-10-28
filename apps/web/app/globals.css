@@ -756,8 +756,9 @@ html[data-theme="dark"] .tw-trip {
   border-radius: 26px;
   overflow: hidden;
 }
-html[data-theme="dark"] .tw-planner,
-:root:not([data-theme="light"]) .tw-planner:not(.tw-planner-light) {
+/* The traveller surface is always warm paper, so the planner never inherits the dark app default there. */
+html[data-theme="dark"] .tw-planner:not(.tw-travel .tw-planner),
+:root:not([data-theme="light"]) .tw-planner:not(.tw-planner-light):not(.tw-travel .tw-planner) {
   --pl-bg: #121a17;
   --pl-surface: #19231e;
   --pl-surface-2: #1d2822;
@@ -801,8 +802,8 @@ html[data-theme="dark"] .tw-planner,
   border-radius: 20px;
   box-shadow: 0 1px 0 color-mix(in oklab, #fff 55%, transparent) inset, 0 18px 34px -30px color-mix(in oklab, #221a10 40%, transparent);
 }
-html[data-theme="dark"] .tw-planner .pl-card,
-:root:not([data-theme="light"]) .tw-planner:not(.tw-planner-light) .pl-card {
+html[data-theme="dark"] .tw-planner:not(.tw-travel .tw-planner) .pl-card,
+:root:not([data-theme="light"]) .tw-planner:not(.tw-planner-light):not(.tw-travel .tw-planner) .pl-card {
   box-shadow: none;
 }
 .tw-planner .pl-chip {
@@ -1200,5 +1201,422 @@ html[data-theme="dark"] .tw-planner .pl-card,
   }
   .tw-travel .tw-travel-card {
     box-shadow: none;
+  }
+}
+
+/* ==========================================================================
+ * Marketing site. Keeps the brand's teal-black canvas and amber accent, with wide uppercase display
+ * type, floating pill navigation, rounded panels and photography set into headlines and cards.
+ * ========================================================================== */
+/* Warm light inset panel inside the dark site (bento section). Amber stays a fill, never text, on light. */
+.tw-void-light {
+  --background: #f3f1ec;
+  --foreground: #091b20;
+  --card: #ffffff;
+  --muted: #e9e6df;
+  --muted-foreground: #5d686b;
+  --border: #e2ded5;
+  --primary-soft: #e9e6df;
+  color: var(--foreground);
+  background: var(--background);
+}
+.tw-wide {
+  font-family: var(--font-unbounded), var(--app-font);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+}
+.tw-hex {
+  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+}
+/* Quiet second voice for display words (a stroke would expose the variable font's overlapping contours). */
+.tw-outline {
+  color: color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
+/* Rolling label: the text slides up and an identical copy rises from below. */
+.tw-roll {
+  display: inline-flex;
+  overflow: hidden;
+  vertical-align: top;
+}
+.tw-roll > span {
+  position: relative;
+  display: inline-block;
+  transition: transform 0.6s var(--ease-out);
+}
+.tw-roll > span::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 100%;
+}
+.group:hover .tw-roll > span,
+.group:focus-visible .tw-roll > span {
+  transform: translateY(-100%);
+}
+.tw-magnetic {
+  transition: translate 0.6s var(--ease-out);
+}
+.tw-magnetic:hover {
+  transition-duration: 0.15s;
+}
+
+/* Lime wipe that rises behind a row on hover. */
+.tw-wipe {
+  isolation: isolate;
+}
+.tw-wipe::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--accent);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform 0.6s var(--ease-out);
+}
+.tw-wipe:hover::before {
+  transform: scaleY(1);
+}
+/* Height-animated disclosure (grid rows 0fr → 1fr). */
+.tw-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.7s var(--ease-out), opacity 0.5s ease;
+}
+.tw-collapse[data-open="1"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+/* Hero: words rise, icon chips spin in and bob, hairlines draw towards the product card. */
+@keyframes tw-chip-in {
+  from { transform: scale(0) rotate(-120deg); }
+  to { transform: none; }
+}
+@keyframes tw-bob {
+  0%, 100% { translate: 0 0; rotate: 0deg; }
+  50% { translate: 0 -0.06em; rotate: -6deg; }
+}
+@keyframes tw-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes tw-pulse-ring {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+@keyframes tw-spin-hex {
+  to { rotate: 360deg; }
+}
+.tw-chip {
+  display: inline-flex;
+  vertical-align: middle;
+  animation:
+    tw-chip-in 1.2s var(--ease-out) both,
+    tw-bob 4.5s ease-in-out infinite;
+  animation-delay: calc(var(--intro) + var(--d, 0ms)), calc(var(--intro) + var(--d, 0ms) + 1.2s);
+}
+.tw-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: tw-draw 1.8s var(--ease-io) forwards;
+  animation-delay: calc(var(--intro) + var(--d, 0ms));
+}
+.tw-ping::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: tw-pulse-ring 2s var(--ease-out) infinite;
+}
+.tw-spin-hex {
+  animation: tw-spin-hex 14s linear infinite;
+}
+/* Photos set into the hero headline: each pill opens from its centre once the words have risen. */
+@keyframes tw-pill-open {
+  from { clip-path: inset(0 50% 0 50% round 999px); }
+  to { clip-path: inset(0 0 0 0 round 999px); }
+}
+@keyframes tw-pill-img {
+  from { transform: scale(1.6); }
+  to { transform: none; }
+}
+.tw-pill {
+  animation: tw-pill-open 1.3s var(--ease-io) both;
+  animation-delay: calc(var(--intro) + var(--d, 0ms));
+}
+.tw-pill img {
+  animation: tw-pill-img 1.8s var(--ease-out) both;
+  animation-delay: calc(var(--intro) + var(--d, 0ms));
+}
+/* Prints floating beside the product card drift at their own depth while the page scrolls. */
+.tw-float {
+  transform: translate3d(0, calc((0.35 - var(--p, 0.35)) * var(--depth, 120px)), 0) rotate(var(--r, 0deg));
+  will-change: transform;
+}
+/* Product card tilts back like a screen on a desk and straightens as it scrolls into view. */
+.tw-tilt-scene {
+  perspective: 1600px;
+  --t: clamp(0, calc((var(--p, 1) - 0.12) * 3.4), 1);
+}
+.tw-tilt {
+  transform-origin: 50% 0%;
+  transform: rotateX(calc((1 - var(--t)) * 34deg)) scale(calc(0.88 + var(--t) * 0.12));
+  will-change: transform;
+}
+.tw-beam {
+  opacity: calc(0.35 + var(--t) * 0.65);
+  transform: scaleX(calc(0.7 + var(--t) * 0.3));
+}
+.tw-skew {
+  transform: skewX(var(--skew, 0deg));
+  transition: transform 0.2s linear;
+}
+
+/* Inset light panel scales up to full width as it arrives. */
+.tw-panel {
+  --t: clamp(0, calc(var(--p, 1) * 3.2), 1);
+  transform: scale(calc(0.93 + var(--t) * 0.07));
+  transform-origin: 50% 0%;
+}
+
+/* Bento card hover: lift and spin the hex badge. */
+.tw-bento {
+  transition: translate 0.5s var(--ease-out), box-shadow 0.5s var(--ease-out);
+}
+.tw-bento:hover {
+  translate: 0 -4px;
+  box-shadow: 0 30px 50px -36px rgba(0, 0, 0, 0.45);
+}
+.tw-bento .tw-hex {
+  transition: rotate 0.7s var(--ease-out);
+}
+.tw-bento:hover .tw-hex {
+  rotate: 60deg;
+}
+.tw-bento:hover .tw-hex > * {
+  rotate: -60deg;
+  transition: rotate 0.7s var(--ease-out);
+}
+/* Currency ticker inside a bento card. */
+@keyframes tw-ticker {
+  0%, 20% { transform: translateY(0); }
+  25%, 45% { transform: translateY(-25%); }
+  50%, 70% { transform: translateY(-50%); }
+  75%, 95% { transform: translateY(-75%); }
+  100% { transform: translateY(0); }
+}
+.tw-ticker {
+  animation: tw-ticker 8s var(--ease-io) infinite;
+}
+.tw-route-path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 2.4s var(--ease-io) 0.3s;
+}
+.is-in .tw-route-path {
+  stroke-dashoffset: 0;
+}
+.tw-route-stop {
+  opacity: 0;
+  transform: scale(0);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.4s ease, transform 0.8s var(--ease-out);
+  transition-delay: calc(0.4s + var(--i, 0) * 0.45s);
+}
+.is-in .tw-route-stop {
+  opacity: 1;
+  transform: none;
+}
+
+/*
+ * Pinned "how it works" scene. ScrollSteps writes data-state on each step (desktop only), so these
+ * hidden states never apply on small screens or without JavaScript.
+ */
+.tw-step-bg {
+  transition: opacity 1s var(--ease-out), transform 1.8s var(--ease-out);
+}
+.tw-step-word,
+.tw-step-copy,
+.tw-step-screen {
+  transition: opacity 0.7s var(--ease-out), transform 1s var(--ease-out), clip-path 1s var(--ease-out);
+}
+.tw-step [data-seq] > * {
+  transition: opacity 0.6s var(--ease-out), transform 0.8s var(--ease-out);
+  transition-delay: calc(0.35s + var(--i, 0) * 0.12s);
+}
+.tw-step .tw-step-bar {
+  transition: transform 1.2s var(--ease-out);
+  transition-delay: calc(0.4s + var(--i, 0) * 0.1s);
+  transform-origin: left;
+}
+@media (min-width: 1024px) {
+  .tw-step[data-state] {
+    pointer-events: none;
+  }
+  .tw-step[data-state="active"] {
+    pointer-events: auto;
+  }
+  .tw-step[data-state="after"] .tw-step-bg {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+  .tw-step[data-state="before"] .tw-step-bg {
+    opacity: 0;
+  }
+  .tw-step[data-state="after"] .tw-step-word {
+    opacity: 0;
+    transform: translateY(45%);
+  }
+  .tw-step[data-state="before"] .tw-step-word {
+    opacity: 0;
+    transform: translateY(-45%);
+  }
+  .tw-step[data-state="after"] .tw-step-copy {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  .tw-step[data-state="before"] .tw-step-copy {
+    opacity: 0;
+    transform: translateY(-40px);
+  }
+  .tw-step[data-state="after"] .tw-step-screen {
+    clip-path: inset(100% 0 0 0 round 30px);
+  }
+  .tw-step[data-state="before"] .tw-step-screen {
+    clip-path: inset(0 0 100% 0 round 30px);
+  }
+  .tw-step-screen {
+    clip-path: inset(0 0 0 0 round 30px);
+  }
+  .tw-step:not([data-state="active"])[data-state] [data-seq] > * {
+    opacity: 0;
+    transform: translateY(14px);
+    transition-delay: 0s;
+  }
+  .tw-step:not([data-state="active"])[data-state] .tw-step-bar {
+    transform: scaleX(0);
+    transition-delay: 0s;
+  }
+}
+.tw-tab-fill {
+  transform: scaleX(0);
+  transform-origin: left;
+}
+[data-state="active"] > .tw-tab-fill {
+  transform: scaleX(var(--lp, 0));
+}
+[data-state="before"] > .tw-tab-fill {
+  transform: scaleX(1);
+}
+
+/* Footer wordmark letters rise in, and each one lights up under the pointer. */
+.tw-giant .w > span {
+  transition: transform 1.2s var(--ease-out), color 0.3s ease;
+  transition-delay: calc(var(--i, 0) * 50ms), 0s;
+}
+.tw-giant .w > span:hover {
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-chip,
+  .tw-ticker,
+  .tw-spin-hex,
+  .tw-ping::after {
+    animation: none !important;
+  }
+  .tw-draw,
+  .tw-route-path {
+    stroke-dashoffset: 0;
+  }
+  .tw-route-stop {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------- traveller landing motion */
+/* Hero photo opens from an inset card to (almost) full width as it scrolls in; the photo settles inside. */
+.tw-expand {
+  --t: clamp(0, calc((var(--p, 1) - 0.08) * 2.6), 1);
+  clip-path: inset(0 calc((1 - var(--t)) * 6%) round calc(20px + (1 - var(--t)) * 28px));
+}
+.tw-expand img {
+  transform: scale(calc(1.18 - var(--t) * 0.18));
+  will-change: transform;
+}
+/* Postcards lean, then straighten and lift when hovered. */
+.tw-postcard {
+  rotate: var(--r, 0deg);
+  transition: rotate 0.7s var(--ease-out), translate 0.7s var(--ease-out), box-shadow 0.7s var(--ease-out);
+}
+.tw-postcard:hover {
+  rotate: 0deg;
+  translate: 0 -10px;
+  box-shadow: 0 40px 60px -40px rgba(45, 30, 15, 0.55);
+}
+/* Packing list items tick themselves off once the card is seen. */
+.tw-tick {
+  transform: scale(0);
+  transition: transform 0.5s var(--ease-out), background-color 0.3s ease;
+  transition-delay: calc(0.5s + var(--i, 0) * 0.35s);
+}
+.tw-tick-line {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 55%;
+  background-size: 0% 1px;
+  transition: background-size 0.6s var(--ease-out), color 0.4s ease;
+  transition-delay: calc(0.6s + var(--i, 0) * 0.35s);
+}
+.is-in .tw-tick {
+  transform: none;
+}
+.is-in .tw-tick-line {
+  background-size: 100% 1px;
+  color: var(--muted-foreground);
+}
+/* A meter that fills when its card is seen. */
+.tw-meter {
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.6s var(--ease-out) 0.4s;
+}
+.is-in .tw-meter {
+  transform: scaleX(var(--v, 1));
+}
+/* Hand-drawn dashed route between postcards. */
+.tw-dash-draw {
+  stroke-dasharray: 6 8;
+  mask-image: linear-gradient(90deg, #000 var(--m, 0%), transparent calc(var(--m, 0%) + 1%));
+  transition: --m 2s var(--ease-io) 0.3s;
+}
+@property --m {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+.is-in .tw-dash-draw {
+  --m: 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tw-tick,
+  .is-in .tw-tick {
+    transform: none;
+  }
+  .tw-tick-line {
+    background-size: 100% 1px;
+  }
+  .tw-meter {
+    transform: scaleX(var(--v, 1));
+  }
+  .tw-dash-draw {
+    mask-image: none;
   }
 }

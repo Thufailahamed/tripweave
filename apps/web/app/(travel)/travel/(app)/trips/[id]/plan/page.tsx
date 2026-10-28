@@ -12,7 +12,7 @@ export default function TravelPlanPage() {
   const { id } = useParams<{ id: string }>();
   return (
     <div className="flex flex-col gap-6">
-      <header>
+      <header className="mx-auto w-full max-w-[880px]">
         <p className="tw-travel-eyebrow">Plan</p>
         <h2 className="tw-travel-display mt-2 text-4xl leading-none tracking-[-0.04em]">A travel page, not a transcript.</h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Ask for a slower morning, a different base or what to do when it rains. The reply is composed from safe travel blocks; prices and availability always come from the saved trip.</p>

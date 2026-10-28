@@ -482,7 +482,10 @@ export function PlanningPanel({ tripId, mode = "operator", persistKey }: { tripI
         </button>
       ) : null}
 
-      {messages.length > 0 ? <div className="sticky bottom-4 z-20">{composer}</div> : null}
+      {messages.length > 0 ? (
+        // The fade keeps the reply from showing through behind the composer as it scrolls under it.
+        <div className="sticky bottom-0 z-20 -mx-3 bg-gradient-to-t from-[var(--background)] from-60% to-transparent px-3 pb-4 pt-8">{composer}</div>
+      ) : null}
       {!engineAvailable ? (
         <p className="text-xs text-[var(--pl-muted)]">AI generation is not configured for this organisation. Requests still work and return a readable summary built from the saved trip; general travel questions need AI.</p>
       ) : null}

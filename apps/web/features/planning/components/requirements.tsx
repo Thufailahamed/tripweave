@@ -5,7 +5,7 @@ import { Accessibility, Baby, CalendarDays, Car, FileSearch, Hotel, ShieldCheck,
 import { TripRequirementSummarySchema } from "@tripweave/planning-contract";
 import { BUDGET_SCOPE_LABELS } from "@/features/trips/types";
 import { dateRange, formatDate, mealLabel, money, titleCase } from "@/lib/utils";
-import { usePlanningSnapshot } from "../context";
+import { usePlanningMode, usePlanningSnapshot } from "../context";
 import { MissingEntity, SectionHeader, StatTile } from "../ui";
 
 const DESCRIPTION = "Authoritative requirement summary for this trip: dates, party, budget, preferences and what is still missing. Pass the tripId from CONTEXT.";
@@ -16,6 +16,7 @@ export const TripRequirementSummary = defineComponent({
   props: TripRequirementSummarySchema,
   component: function TripRequirementSummaryView({ props }) {
     const snapshot = usePlanningSnapshot();
+    const traveler = usePlanningMode() === "traveler";
     const trip = snapshot.trip;
     if (props.tripId !== trip.id && props.tripId !== trip.ref) return <MissingEntity what="trip" />;
     const s = trip.specialRequirements;
@@ -109,10 +110,16 @@ export const TripRequirementSummary = defineComponent({
           </ul>
         ) : null}
 
-        <p className="text-[10px] text-[var(--pl-muted)]">
-          Last extraction: {trip.parseResult?.parsedAt ? formatDate(trip.parseResult.parsedAt, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "not run"}.
-          {trip.parseResult ? ` Engine: ${trip.parseResult.engine}.` : ""}
-        </p>
+        {traveler ? (
+          trip.parseResult?.parsedAt ? (
+            <p className="text-[10px] text-[var(--pl-muted)]">Read from your trip description on {formatDate(trip.parseResult.parsedAt, { day: "numeric", month: "short", year: "numeric" })}.</p>
+          ) : null
+        ) : (
+          <p className="text-[10px] text-[var(--pl-muted)]">
+            Last extraction: {trip.parseResult?.parsedAt ? formatDate(trip.parseResult.parsedAt, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "not run"}.
+            {trip.parseResult ? ` Engine: ${trip.parseResult.engine}.` : ""}
+          </p>
+        )}
       </section>
     );
   },

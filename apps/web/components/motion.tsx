@@ -285,3 +285,163 @@ export function IntroSeen() {
   }, []);
   return null;
 }
+
+/**
+ * Pinned step scene (desktop): a tall wrapper whose sticky child plays `count` steps in turn. Every
+ * `[data-step-item="i"]` descendant gets `data-state` = before | active | after, and the wrapper exposes
+ * `--p` (whole scene) and `--lp` (progress within the active step). `[data-step-go="i"]` buttons scroll
+ * to that step. Below `lg` (or with reduced motion) nothing is written, so every step shows in flow.
+ */
+export function ScrollSteps({ count, className, children, ...props }: Omit<BaseProps, "as"> & { count: number }) {
+  const ref = React.useRef<HTMLElement>(null);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const mq = window.matchMedia("(min-width: 1024px)");
+    let raf = 0;
+    let current = -1;
+    const items = () => el.querySelectorAll<HTMLElement>("[data-step-item]");
+    const update = () => {
+      raf = 0;
+      if (!mq.matches || prefersReducedMotion()) {
+        if (current !== -1) for (const it of items()) it.removeAttribute("data-state");
+        current = -1;
+        return;
+      }
+      const p = Math.min(1, Math.max(0, progress("sticky", el.getBoundingClientRect(), window.innerHeight)));
+      const step = Math.min(count - 1, Math.floor(p * count));
+      el.style.setProperty("--p", p.toFixed(4));
+      el.style.setProperty("--lp", Math.min(1, p * count - step).toFixed(4));
+      if (step === current) return;
+      current = step;
+      el.dataset.step = String(step);
+      for (const it of items()) {
+        const i = Number(it.dataset.stepItem);
+        it.dataset.state = i < step ? "before" : i === step ? "active" : "after";
+      }
+    };
+    const schedule = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    const onClick = (e: MouseEvent) => {
+      const go = (e.target as HTMLElement).closest<HTMLElement>("[data-step-go]");
+      if (!go) return;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      const travel = el.offsetHeight - window.innerHeight;
+      window.scrollTo({ top: top + ((Number(go.dataset.stepGo) + 0.5) / count) * travel, behavior: "smooth" });
+    };
+    update();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    mq.addEventListener("change", schedule);
+    el.addEventListener("click", onClick);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      mq.removeEventListener("change", schedule);
+      el.removeEventListener("click", onClick);
+    };
+  }, [count]);
+  return (
+    <section ref={ref} className={className} {...props}>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Endless marquee that drifts on its own and speeds up (and turns around) with the reader's scrolling.
+ * Children are rendered twice; the copy is hidden from assistive tech. `pauseOnHover` eases it to a stop
+ * under the pointer. Static under reduced motion.
+ */
+export function VelocityMarquee({ children, speed = 50, reverse, pauseOnHover, className }: { children: React.ReactNode; speed?: number; reverse?: boolean; pauseOnHover?: boolean; className?: string }) {
+  const track = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const el = track.current;
+    if (!el || prefersReducedMotion()) return;
+    let raf = 0;
+    let x = 0;
+    let boost = 0;
+    let dir = reverse ? -1 : 1;
+    let lastT = performance.now();
+    let lastY = window.scrollY;
+    let visible = true;
+    let hovered = false;
+    let ease = 1;
+    const io = new IntersectionObserver(([e]) => {
+      visible = !!e?.isIntersecting;
+    });
+    io.observe(el);
+    const enter = () => {
+      hovered = pauseOnHover === true;
+    };
+    const leave = () => {
+      hovered = false;
+    };
+    el.addEventListener("pointerenter", enter);
+    el.addEventListener("pointerleave", leave);
+    const tick = (t: number) => {
+      const dt = Math.min(0.05, (t - lastT) / 1000);
+      lastT = t;
+      const dy = window.scrollY - lastY;
+      lastY = window.scrollY;
+      if (dy) dir = (dy > 0 ? 1 : -1) * (reverse ? -1 : 1);
+      boost += (Math.min(60, Math.abs(dy)) - boost) * 0.08;
+      ease += ((hovered ? 0 : 1) - ease) * 0.06;
+      if (visible) {
+        const w = el.scrollWidth / 2;
+        x = (x - dir * (speed + boost * 22) * ease * dt) % w;
+        if (x > 0) x -= w;
+        el.style.transform = `translate3d(${x.toFixed(1)}px,0,0)`;
+        el.style.setProperty("--skew", `${(-dir * Math.min(boost, 30) * 0.25).toFixed(2)}deg`);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      io.disconnect();
+      el.removeEventListener("pointerenter", enter);
+      el.removeEventListener("pointerleave", leave);
+    };
+  }, [speed, reverse, pauseOnHover]);
+  return (
+    <div className={cn("overflow-hidden", className)}>
+      <div ref={track} className="flex w-max will-change-transform">
+        {[0, 1].map((copy) => (
+          <div key={copy} aria-hidden={copy === 1 || undefined} className="tw-skew flex shrink-0 items-center">
+            {children}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Pulls its child gently towards the pointer while hovered (fine pointers only). */
+export function Magnetic({ children, strength = 0.28, className }: { children: React.ReactNode; strength?: number; className?: string }) {
+  const ref = React.useRef<HTMLSpanElement>(null);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el || prefersReducedMotion() || !window.matchMedia("(pointer: fine)").matches) return;
+    const move = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      el.style.translate = `${((e.clientX - r.left - r.width / 2) * strength).toFixed(1)}px ${((e.clientY - r.top - r.height / 2) * strength).toFixed(1)}px`;
+    };
+    const leave = () => {
+      el.style.translate = "";
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerleave", leave);
+    return () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerleave", leave);
+    };
+  }, [strength]);
+  return (
+    <span ref={ref} className={cn("tw-magnetic inline-flex", className)}>
+      {children}
+    </span>
+  );
+}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand";
 import { TravelPublicHeader } from "@/features/travel/public-header";
+import { Reveal } from "@/components/motion";
 
 export default function TravelPublicLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,7 +10,7 @@ export default function TravelPublicLayout({ children }: { children: React.React
         Skip to content
       </a>
       <TravelPublicHeader />
-      <main id="content" className="flex-1">
+      <main id="content" className="flex-1 pt-20 md:pt-24">
         {children}
       </main>
       <footer className="border-t border-border bg-[#f1eadc]">
@@ -33,6 +34,15 @@ export default function TravelPublicLayout({ children }: { children: React.React
             <Link href="/terms" className="font-semibold hover:text-accent">Terms</Link>
           </nav>
         </div>
+        <Reveal as="p" variant="fade" aria-hidden className="tw-words tw-travel-display mx-auto w-full max-w-7xl select-none overflow-hidden whitespace-nowrap px-4 pb-2 text-[clamp(48px,10.5vw,190px)] leading-[0.95] tracking-[-0.05em] md:px-8">
+          {["Go", "somewhere", "good."].map((w, i) => (
+            <span key={w} className="w">
+              <span className={i === 1 ? "italic text-accent" : undefined} style={{ "--i": i } as React.CSSProperties}>
+                {w}
+              </span>{" "}
+            </span>
+          ))}
+        </Reveal>
         <div className="border-t border-border">
           <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between md:px-8">
             <p>© {new Date().getFullYear()} TripWeave. Made for the trip you keep thinking about.</p>

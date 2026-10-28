@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PlanningSnapshot } from "@tripweave/planning-contract";
 import type { trips } from "@tripweave/database";
 import { PLANNING_EXAMPLES } from "@tripweave/ai";
-import { buildFallbackProgram, buildPlanningQuestions, validatePlanningProgram } from "./planning";
+import { buildFallbackProgram, buildPlanningQuestions, normalisePlanningProgram, validatePlanningProgram } from "./planning";
 
 const baseSnapshot: PlanningSnapshot = {
   generatedAt: "2026-10-28T10:00:00.000Z",
@@ -315,6 +315,50 @@ when = Choices("Which style?", [c1, c2])`;
   it("accepts a package comparison only for packages in the snapshot", () => {
     const program = `root = PlanningCanvas("Packages", [pkg, hotel, route, cost, why])\npkg = PackageComparison(["package_1"])\nhotel = HotelCard("offer_1", "package_1")\nroute = RouteSummary(null, "package_1")\ncost = CostBreakdown("package_1")\nwhy = RecommendationExplanation("package_1")`;
     expect(validatePlanningProgram(program, packageSnapshot)).toEqual({ ok: true });
+  });
+});
+
+describe("planning program normalisation", () => {
+  // A real reply from a small model: a good page whose canvas call left out the blocks list.
+  const slipped = `root = PlanningCanvas("Sun, sand and surf in Sri Lanka", "Ten days of coastal bliss.", ["10 days", "December", "Beachside"], "warm waves, salty air", "Sri Lanka")
+requirements = TripRequirementSummary("trip_1")
+sights = Highlights("Coastal must-sees", [s1, s2])
+s1 = Highlight("Mirissa, Sri Lanka", "South Coast", "Whale watching and golden beaches.")
+s2 = Highlight("Bentota, Sri Lanka", "South-West Coast", "Water sports and riverside calm.")
+next = FollowUps("What's next?", ["Which coast is best in December?"])
+
+# The requirements block shows what we know.`;
+
+  it("rebuilds a canvas call that dropped its blocks list, keeping every other argument in order", () => {
+    expect(validatePlanningProgram(slipped, baseSnapshot)).toMatchObject({ ok: false });
+    const fixed = normalisePlanningProgram(slipped);
+    expect(fixed.split("\n")[0]).toBe(`root = PlanningCanvas("Sun, sand and surf in Sri Lanka", [requirements, sights, next], "Ten days of coastal bliss.", ["10 days", "December", "Beachside"], "warm waves, salty air", "Sri Lanka")`);
+    expect(fixed).toContain(`s1 = Highlight("Mirissa, Sri Lanka"`);
+    expect(validatePlanningProgram(fixed, baseSnapshot)).toEqual({ ok: true });
+  });
+
+  it("moves a misplaced blocks list into second place and adds defined blocks the model forgot to list", () => {
+    const misplaced = `root = PlanningCanvas("Trip", "Server data only.", [summary])\nsummary = TripRequirementSummary("trip_1")\nnext = FollowUps("Next", ["Show the route"])`;
+    expect(normalisePlanningProgram(misplaced).split("\n")[0]).toBe(`root = PlanningCanvas("Trip", [summary, next], "Server data only.")`);
+    const forgotten = `root = PlanningCanvas("Trip", [summary])\nsummary = TripRequirementSummary("trip_1")\nnext = FollowUps("Next", ["Show the route"])`;
+    expect(normalisePlanningProgram(forgotten).split("\n")[0]).toBe(`root = PlanningCanvas("Trip", [summary, next])`);
+  });
+
+  it("closes a list the model closed with a parenthesis, and closes brackets left open", () => {
+    const slip = `root = PlanningCanvas("Coasts", [table])\ntable = ComparisonTable("South-west vs east", ["South-west", "East"], [["Weather", "Dry", "Monsoon"], ["Best for", "Surfing", "Quiet retreats (off-season)")])`;
+    expect(validatePlanningProgram(slip, baseSnapshot)).toMatchObject({ ok: false });
+    const fixed = normalisePlanningProgram(slip);
+    expect(fixed).toContain(`["Best for", "Surfing", "Quiet retreats (off-season)"]])`);
+    expect(validatePlanningProgram(fixed, baseSnapshot)).toEqual({ ok: true });
+    expect(normalisePlanningProgram(`root = PlanningCanvas("Trip", [summary]\nsummary = TripRequirementSummary("trip_1"`)).toBe(`root = PlanningCanvas("Trip", [summary])\nsummary = TripRequirementSummary("trip_1")`);
+  });
+
+  it("leaves well-formed, rootless and child-only programs alone", () => {
+    const valid = `root = PlanningCanvas("Trip", [summary], "Server data only.")\nsummary = TripRequirementSummary("trip_1")`;
+    expect(normalisePlanningProgram(valid)).toBe(valid);
+    expect(normalisePlanningProgram(`summary = TripRequirementSummary("trip_1")`)).toBe(`summary = TripRequirementSummary("trip_1")`);
+    const loose = `root = PlanningCanvas("Trip", "Only a stray highlight.")\ns1 = Highlight("Ella, Sri Lanka", "Hill country", "Tea.")`;
+    expect(normalisePlanningProgram(loose)).toBe(loose);
   });
 });
 

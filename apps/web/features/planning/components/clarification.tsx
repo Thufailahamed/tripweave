@@ -117,7 +117,7 @@ export const ClarificationForm = defineComponent({
               {answered === questions.length ? <Check className="size-3" aria-hidden /> : <CircleHelp className="size-3" aria-hidden />} {answered}/{questions.length} answered
             </span>
           </div>
-          <p className="pl-hand mt-1.5">{props.prompt ?? "only what the backend still needs"}</p>
+          <p className="pl-hand mt-1.5">{props.prompt ?? "just what is still missing"}</p>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--pl-surface-2)] ring-1 ring-inset ring-[var(--pl-line)]" aria-hidden>
             <span className="pl-bar block h-full rounded-full bg-[var(--pl-accent)]" style={{ width: `${Math.max(4, progress)}%` }} />
           </div>
@@ -200,7 +200,7 @@ export const ClarificationForm = defineComponent({
               <button type="submit" disabled={!canWrite || streaming || sent} className="pl-btn pl-btn-accent disabled:cursor-not-allowed disabled:opacity-50">
                 {sent ? "Sending…" : "Apply answers"} <ArrowRight className="size-3.5" aria-hidden />
               </button>
-              <span className="text-[10px] text-[var(--pl-muted)]">Validated by the API. Prices and availability are not changed by this form.</span>
+              <span className="text-[10px] text-[var(--pl-muted)]">Checked before saving. Prices and availability are not changed by this form.</span>
             </div>
           </form>
         </div>

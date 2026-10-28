@@ -366,6 +366,137 @@ export function validatePlanningProgram(
   return errors.length > 0 ? { ok: false, errors } : { ok: true };
 }
 
+/** Child blocks that only belong inside their container, never directly on the canvas. */
+const CHILD_ONLY = new Set(["Highlight", "Choice", "BoardDay", "RouteStop"]);
+const STATEMENT_START = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*/;
+
+type CanvasArg = { kind: "string" | "array" | "other"; raw: string; refs: string[] | null };
+
+/** Splits a call's argument list at top-level commas, skipping strings and nested brackets. */
+function splitArgs(source: string): string[] | null {
+  const args: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]!;
+    if (char === '"') {
+      let end = index + 1;
+      while (end < source.length && source[end] !== '"') end += source[end] === "\\" ? 2 : 1;
+      if (end >= source.length) return null;
+      current += source.slice(index, end + 1);
+      index = end;
+      continue;
+    }
+    if (char === "[" || char === "(") depth += 1;
+    if (char === "]" || char === ")") depth -= 1;
+    if (depth < 0) return null;
+    if (char === "," && depth === 0) {
+      args.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  if (depth !== 0) return null;
+  if (current.trim()) args.push(current.trim());
+  return args;
+}
+
+function classifyArg(raw: string): CanvasArg {
+  if (raw.startsWith('"')) return { kind: "string", raw, refs: null };
+  if (raw.startsWith("[") && raw.endsWith("]")) {
+    const items = splitArgs(raw.slice(1, -1)) ?? [];
+    const refs = items.every((item) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(item)) ? items : null;
+    return { kind: "array", raw, refs };
+  }
+  return { kind: "other", raw, refs: null };
+}
+
+const CLOSER = { "(": ")", "[": "]" } as const;
+
+/**
+ * Closes a statement's brackets in the shape they were opened: a closer that does not match takes the
+ * open bracket's shape, a stray closer is dropped and unclosed brackets are closed at the end. Strings
+ * are copied untouched; a statement with an unterminated string is returned as it is.
+ */
+function balanceBrackets(body: string): string {
+  const stack: (keyof typeof CLOSER)[] = [];
+  let out = "";
+  for (let index = 0; index < body.length; index += 1) {
+    const char = body[index]!;
+    if (char === '"') {
+      let end = index + 1;
+      while (end < body.length && body[end] !== '"') end += body[end] === "\\" ? 2 : 1;
+      if (end >= body.length) return body;
+      out += body.slice(index, end + 1);
+      index = end;
+    } else if (char === "(" || char === "[") {
+      stack.push(char);
+      out += char;
+    } else if (char === ")" || char === "]") {
+      const open = stack.pop();
+      if (open) out += CLOSER[open];
+    } else out += char;
+  }
+  return out + stack.reverse().map((open) => CLOSER[open]).join("");
+}
+
+/**
+ * Smaller models often write a good page but slip on syntax the parser cannot forgive: a list closed
+ * with `)`, a canvas call without its blocks list (`PlanningCanvas(title, subtitle, chips, ...)`) or
+ * blocks defined but never listed. Each makes the parser discard the whole reply. This repairs brackets
+ * per statement and rewrites the root call into the documented order with the top-level blocks the
+ * model defined. It never invents content, and the result is still validated afterwards.
+ */
+export function normalisePlanningProgram(program: string): string {
+  const lines = program.split("\n");
+  const statements: { name: string; prefix: string; lines: number[]; body: string; original: string }[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    const match = STATEMENT_START.exec(line);
+    const last = statements[statements.length - 1];
+    if (match) statements.push({ name: match[1]!, prefix: match[0], lines: [index], body: line.slice(match[0].length), original: "" });
+    else if (last && line.trim() && !line.trim().startsWith("#")) {
+      last.lines.push(index);
+      last.body += `\n${line}`;
+    }
+  }
+  for (const statement of statements) {
+    statement.original = statement.body;
+    statement.body = balanceBrackets(statement.body.trimEnd());
+    if (statement.body === statement.original.trimEnd()) statement.body = statement.original;
+  }
+
+  const root = statements.find((statement) => statement.name === "root");
+  const call = root ? /^PlanningCanvas\s*\(([\s\S]*)\)\s*$/.exec(root.body.trim()) : null;
+  const args = call ? splitArgs(call[1]!)?.map(classifyArg) : null;
+  if (root && args && args.length > 0) {
+    const defined = new Map(statements.filter((statement) => statement !== root).map((statement) => [statement.name, statement.body] as const));
+    const referenced = new Set<string>();
+    for (const [name, body] of defined) for (const other of defined.keys()) if (other !== name && new RegExp(`\\b${other}\\b`).test(body.replace(/"(?:[^"\\]|\\.)*"/g, ""))) referenced.add(other);
+    const orphans = [...defined.entries()]
+      .filter(([name, body]) => {
+        const type = /^([A-Z][A-Za-z]+)\s*\(/.exec(body.trim())?.[1];
+        return !referenced.has(name) && !!type && type !== "PlanningCanvas" && !CHILD_ONLY.has(type);
+      })
+      .map(([name]) => name);
+    const blocksIndex = args.findIndex((arg) => arg.refs !== null && arg.refs.length > 0 && arg.refs.every((ref) => defined.has(ref)));
+    const listed = blocksIndex >= 0 ? args[blocksIndex]!.refs! : [];
+    const blocks = [...listed, ...orphans.filter((name) => !listed.includes(name))];
+    if (blocks.length > 0 && args[0]?.kind === "string" && (blocksIndex !== 1 || blocks.length > listed.length)) {
+      const rest = args.filter((_, index) => index !== blocksIndex);
+      const ordered = [rest[0]!, { kind: "array" as const, raw: `[${blocks.join(", ")}]`, refs: blocks }, ...rest.slice(1)];
+      root.body = `PlanningCanvas(${ordered.map((arg) => arg.raw).join(", ")})`;
+    }
+  }
+
+  const changed = statements.filter((statement) => statement.body !== statement.original);
+  if (changed.length === 0) return program;
+  const dropped = new Set(changed.flatMap((statement) => statement.lines.slice(1)));
+  const rewritten = new Map(changed.map((statement) => [statement.lines[0]!, `${statement.prefix}${statement.body}`] as const));
+  return lines.flatMap((line, index) => (dropped.has(index) ? [] : [rewritten.get(index) ?? line])).join("\n");
+}
+
 /** Deterministic, readable fallback built only from authoritative IDs. */
 export function buildFallbackProgram(snapshot: PlanningSnapshot, reason: "unavailable" | "invalid" | "standard" = "standard"): string {
   const defs: string[] = [];

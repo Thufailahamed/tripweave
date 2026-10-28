@@ -23,6 +23,13 @@ export const IMAGES = {
   footer: { name: "footer", widths: FULL, alt: "The Nine Arch Bridge surrounded by jungle" },
   auth: { name: "auth", widths: FULL, alt: "A waterfall falling from a misty green cliff" },
   features: { name: "features", widths: FULL, alt: "Aerial view of terraced green fields" },
+  stilts: { name: "stilts", widths: FULL, alt: "Stilt fishermen perched on poles in shallow water off a palm-lined beach" },
+  sigiriya: { name: "sigiriya", widths: FULL, alt: "Aerial view of the Sigiriya rock fortress rising above dense forest" },
+  temple: { name: "temple", widths: FULL, alt: "Painted fishing boats moored below a golden temple tower" },
+  elephants: { name: "elephants", widths: CARD, alt: "A herd of elephants bathing in a shallow river" },
+  beach: { name: "beach", widths: CARD, alt: "Aerial view of fishing boats on a sandy beach beside the surf" },
+  colombo: { name: "colombo", widths: CARD, alt: "A train heading towards the Lotus Tower in Colombo at golden hour" },
+  coconut: { name: "coconut", widths: CARD, alt: "A rope swing hanging from a leaning palm over the beach at sunset" },
 } satisfies Record<string, MarketingImage>;
 
 const imageUrl = (img: MarketingImage, width: number) => `/images/marketing/${img.name}-${width}.webp`;

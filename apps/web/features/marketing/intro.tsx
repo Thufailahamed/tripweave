@@ -17,8 +17,8 @@ export function IntroCurtain() {
         <span>Loading</span>
       </div>
       <div className="flex flex-col items-center gap-6 px-4">
-        <LogoMark className="tw-intro-mark size-10 text-accent md:size-12" />
-        <p className="tw-display text-5xl text-white md:text-7xl">
+        <LogoMark className="tw-intro-mark size-10 text-white md:size-12" />
+        <p className="tw-wide text-4xl text-accent md:text-6xl">
           <span className="tw-mask">
             {[...WORD].map((ch, i) => (
               <span key={i} className="tw-letter" style={{ "--i": i, animationDelay: `${120 + i * 45}ms` } as React.CSSProperties}>
@@ -31,7 +31,7 @@ export function IntroCurtain() {
       <div>
         <div className="flex items-end justify-between px-4 pb-4 md:px-8">
           <span className="text-xs text-muted-foreground">Weaving itineraries</span>
-          <span className="tw-intro-count tw-num text-5xl font-semibold tracking-[-0.07em] md:text-7xl" />
+          <span className="tw-intro-count tw-num tw-wide text-5xl md:text-7xl" />
         </div>
         <div className="h-px bg-border">
           <div className="tw-intro-bar h-px bg-accent" />

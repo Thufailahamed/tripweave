@@ -9,7 +9,7 @@ import { ok, parseBody, requireParam, type AppContext } from "../lib/http";
 import { audit, rateLimit, requirePermission, requireTenant } from "../middleware/auth";
 import { loadIntegrations } from "../services/settings";
 import { lookupPlaces } from "../services/places";
-import { applyClarificationAnswers, buildFallbackProgram, buildPlanningSnapshot, validatePlanningProgram } from "../services/planning";
+import { applyClarificationAnswers, buildFallbackProgram, buildPlanningSnapshot, normalisePlanningProgram, validatePlanningProgram } from "../services/planning";
 
 export const planningRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
 planningRoutes.use("*", requireTenant);
@@ -125,7 +125,7 @@ planningRoutes.post("/trips/:id/planning", requirePermission("trips:read"), rate
         let text = "";
         try {
           const result = await streamPlanningProgram(llm, snapshot, { message: body.message, history: body.history, repair }, (chunk) => void write("delta", { text: chunk }), controller.signal);
-          text = result.text;
+          text = normalisePlanningProgram(result.text);
           outputChars += text.length;
           const validation = validatePlanningProgram(text, snapshot, { requireMap });
           if (validation.ok) {
