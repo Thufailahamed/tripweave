@@ -3,7 +3,7 @@ import * as React from "react";
 import { defineComponent, useTriggerAction } from "@openuidev/react-lang";
 import { ArrowUpRight, Layers, Map, Wand2 } from "lucide-react";
 import { QuickActionsSchema } from "@tripweave/planning-contract";
-import { usePlanningSnapshot } from "../context";
+import { usePlanningMode, usePlanningSnapshot } from "../context";
 
 const DESCRIPTION = "A row of permitted next-step actions derived from the server (itinerary, optimisation, packages). Takes no arguments. Use it at the end of a reply when a next step is genuinely useful; never invent an action.";
 
@@ -13,6 +13,8 @@ export const QuickActions = defineComponent({
   props: QuickActionsSchema,
   component: function QuickActionsView() {
     const snapshot = usePlanningSnapshot();
+    const mode = usePlanningMode();
+    const traveler = mode === "traveler";
     const action = useTriggerAction();
     const can = (name: string) => snapshot.allowedActions.includes(name as never);
     const items: { label: string; hint: string; icon: typeof Map; run: () => void }[] = [];
@@ -20,10 +22,10 @@ export const QuickActions = defineComponent({
       items.push({ label: "Itinerary", hint: "Stops, dates and drive times", icon: Map, run: () => void action("Open itinerary", undefined, { type: "open_itinerary", params: {} }) });
     }
     if (snapshot.packages.length > 0 && can("open_packages")) {
-      items.push({ label: "Packages", hint: "Compare, re-price or quote", icon: Layers, run: () => void action("Open packages", undefined, { type: "open_packages", params: {} }) });
+      items.push({ label: traveler ? "Stay ideas" : "Packages", hint: traveler ? "See the hotels along this route" : "Compare, re-price or quote", icon: Layers, run: () => void action("Open packages", undefined, { type: "open_packages", params: {} }) });
     }
     if (snapshot.permissions.canRunOptimisation && can("open_optimise")) {
-      items.push({ label: "Optimise", hint: "Search for a better stay", icon: Wand2, run: () => void action("Configure optimisation", undefined, { type: "open_optimise", params: {} }) });
+      items.push({ label: traveler ? "Find stays" : "Optimise", hint: traveler ? "Search along the confirmed route" : "Search for a better stay", icon: Wand2, run: () => void action("Configure optimisation", undefined, { type: "open_optimise", params: {} }) });
     }
     if (items.length === 0) return null;
     return (

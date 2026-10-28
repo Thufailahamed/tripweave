@@ -10,7 +10,7 @@ import type { PackageView, Trip } from "@/features/trips/types";
 
 export interface TripDestinationInput {
   title: string;
-  parseResult?: { parsed?: { destinations?: string[] } } | null;
+  parseResult?: { parsed?: { destinations?: string[] }; suggestedItinerary?: { plan?: { destination: string }[] } | null } | null;
   itinerary?: { stops: { destination: string }[] } | null;
 }
 
@@ -18,6 +18,8 @@ export interface TripDestinationInput {
 export function tripDestination(input: TripDestinationInput): string {
   const parsed = input.parseResult?.parsed?.destinations?.find((value) => value.trim().length > 0);
   if (parsed) return parsed.trim();
+  const suggested = input.parseResult?.suggestedItinerary?.plan?.find((value) => value.destination.trim().length > 0);
+  if (suggested) return suggested.destination.trim();
   const stop = input.itinerary?.stops.find((value) => value.destination.trim().length > 0);
   if (stop) return stop.destination.trim();
   return input.title.trim() || "Your trip";

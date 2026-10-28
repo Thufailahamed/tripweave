@@ -64,6 +64,7 @@ export function DestinationPhoto({
   className,
   imgClassName,
   eager = false,
+  placeholder = "sheen",
 }: {
   destination: string;
   imageId?: string | null;
@@ -71,6 +72,8 @@ export function DestinationPhoto({
   className?: string;
   imgClassName?: string;
   eager?: boolean;
+  /** "art" shows a deterministic postcard while a remote lookup is pending; good for covers. */
+  placeholder?: "sheen" | "art";
 }) {
   const [failed, setFailed] = React.useState(false);
   const source = destinationImage(destination);
@@ -83,7 +86,7 @@ export function DestinationPhoto({
   }, [src]);
 
   const loading = !src && !failed && !imageId && !source && remote === undefined && destination.trim().length > 0;
-  if (loading) return <div aria-hidden className={cn("pl-sheen size-full", className)} />;
+  if (loading) return placeholder === "art" ? <PostcardArt destination={destination} className={className} /> : <div aria-hidden className={cn("pl-sheen size-full", className)} />;
   if (!src || failed) return <PostcardArt destination={destination} className={className} />;
 
   return (

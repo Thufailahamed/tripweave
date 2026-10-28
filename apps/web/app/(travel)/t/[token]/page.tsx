@@ -43,7 +43,7 @@ export default function SharedTripPage() {
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 md:px-8 md:py-12">
         <section className="overflow-hidden rounded-[1.8rem] border border-border bg-card">
           <div className="tw-travel-photo relative aspect-[16/8] min-h-64 rounded-none">
-            <DestinationPhoto destination={destination} alt={destination} className="size-full" eager />
+            <DestinationPhoto destination={destination} alt={destination} className="size-full" placeholder="art" eager />
             <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/6 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-6 text-[#fffdf8] md:p-8">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/70">A shared trip</p>

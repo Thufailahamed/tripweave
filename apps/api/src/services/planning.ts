@@ -133,14 +133,15 @@ export async function buildPlanningSnapshot(ctx: AppContext, tripId: string): Pr
   const job = jobs.find((row) => row.status === "succeeded" || row.status === "infeasible") ?? null;
   const records = job?.status === "succeeded" ? await trips.listJobPackages(db, a.organizationId, job.id) : [];
   const { packages: presented, offers } = await presentReferencedPackages(ctx, records.slice(0, 20));
-  const quotesPage = a.permissions.has("quotes:read") ? await quotes.listQuotes(db, a.organizationId, { tripId, page: 1, pageSize: 20 }) : null;
+  const individual = a.accountKind === "individual";
+  const quotesPage = !individual && a.permissions.has("quotes:read") ? await quotes.listQuotes(db, a.organizationId, { tripId, page: 1, pageSize: 20 }) : null;
   const questions = buildPlanningQuestions(trip, itinerary);
   const parse = asStoredParse(trip.parseResult);
   const itineraryView = await loadItineraryView(ctx, itinerary, trip);
   const permissions = {
     canWriteTrips: a.permissions.has("trips:write"),
     canRunOptimisation: a.permissions.has("optimisation:run"),
-    canCreateQuotes: a.permissions.has("quotes:write"),
+    canCreateQuotes: !individual && a.permissions.has("quotes:write"),
     canSeeMargins: a.permissions.has("margins:view"),
     canSeeContracts: a.permissions.has("agreements:manage"),
   };

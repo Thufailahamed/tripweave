@@ -12,7 +12,9 @@
     "dev:web": "pnpm --filter @tripweave/web dev",
     "db:migrate:local": "pnpm --filter @tripweave/api db:migrate:local",
     "db:seed:local": "pnpm --filter @tripweave/api db:seed:local",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:traveler": "node scripts/traveler-smoke.mjs",
+    "smoke:traveler:ui": "node scripts/traveler-ui-smoke.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

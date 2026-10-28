@@ -28,8 +28,9 @@ const packingItem = (over: Partial<TravelerPackingItem>): TravelerPackingItem =>
 });
 
 describe("tripDestination", () => {
-  it("prefers the parsed destination, then the first itinerary stop, then the title", () => {
+  it("prefers the parsed destination, then the suggested plan, then the first itinerary stop, then the title", () => {
     expect(tripDestination({ title: "A trip", parseResult: { parsed: { destinations: ["Kandy"] } }, itinerary: { stops: [{ destination: "Ella" }] } })).toBe("Kandy");
+    expect(tripDestination({ title: "A trip", parseResult: { suggestedItinerary: { plan: [{ destination: "Galle" }] } }, itinerary: null })).toBe("Galle");
     expect(tripDestination({ title: "A trip", parseResult: null, itinerary: { stops: [{ destination: "Ella" }] } })).toBe("Ella");
     expect(tripDestination({ title: "A trip", parseResult: null, itinerary: null })).toBe("A trip");
   });

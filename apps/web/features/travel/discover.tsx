@@ -80,7 +80,7 @@ export function TravelDiscover() {
             <article key={`${place.name}-${place.country}`} className="group flex flex-col">
               <Link href={`/travel/trips/new?destination=${encodeURIComponent(place.name)}&idea=${encodeURIComponent(`A trip to ${place.name}. ${place.blurb}`)}`}>
                 <div className="tw-travel-photo aspect-[4/5]">
-                  <DestinationPhoto destination={place.name} alt={place.name} className="size-full" />
+                  <DestinationPhoto destination={place.name} alt={place.name} className="size-full" placeholder="art" />
                 </div>
                 <div className="mt-3 flex items-start justify-between gap-2">
                   <div>

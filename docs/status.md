@@ -20,10 +20,12 @@ Covers roadmap phases 1–7 of the master prompt. "Verified" means executed in t
 
 **Phase 8 – OpenUI planning assistant.** A finite, shared component allowlist; server-built, permission-filtered snapshots of the trip, itinerary, hotel offers and package pricing; provider-independent streaming generation; strict parser/ID/action validation; structured clarification forms; deterministic fallback and standard shadcn view; tenant, margin and role tests. `docs/openui-integration.md` documents the authority boundary, allowlist and verification.
 
+**Phase 9 – Individual traveller product.** Personal workspaces (`organizations.account_kind = 'individual'`, restricted `staff` membership), traveller registration/session routing, a warm editorial shell, public landing at `/travel`, trip wizard with AI extraction + deterministic route suggestion, editable itinerary with map, OpenUI planner in traveller mode, stay optimisation with budget handoff, budget tracker, deterministic activity-aware packing, private notes, profile/password, expiring read-only share links, printable public trip page, Wikipedia discovery and archive. New tables: `trip_budget_items`, `trip_packing_items`, `trip_notes`, `trip_shares`. `docs/traveler.md` documents the surface and its limits.
+
 ## Verification performed
 | Check | Result |
 |---|---|
-| `pnpm test` — 34 files, 280 tests (pricing, itinerary, optimiser, providers incl. Amadeus, AI, OpenUI planning, renderer incl. Unicode PDF, D1 repositories, API e2e, security, MFA/email verification, XLSX import, platform admin) on real migrations over SQLite | pass |
+| `pnpm test` — 48 files, 430 tests (pricing, itinerary, optimiser, providers incl. Amadeus, AI, OpenUI planning, renderer incl. Unicode PDF, D1 repositories, API e2e, security, MFA/email verification, XLSX import, platform admin, traveller APIs/packing/public sharing) on real migrations over SQLite | pass |
 | Migration 0006 applied with `wrangler d1 migrations apply --local` (real D1 runtime); `wrangler deploy --dry-run` bundles the Worker (4.7 MB, 1.6 MB gzip, within the 3 MB free-plan limit); `next build` passes | pass |
 | Sample Sinhala/Tamil/Cyrillic/Greek quotation PDF rendered with pdf.js and inspected by eye | pass (see below) |
 | `pnpm typecheck` (strict TS, all packages + API + web) | pass |
@@ -32,13 +34,16 @@ Covers roadmap phases 1–7 of the master prompt. "Verified" means executed in t
 | `next build` (40 routes) and `vite build` (vinext, Cloudflare Worker) | pass |
 | Live Workers AI through AI Gateway `default` (Gemma 4 26B A4B); editorial planner and trip-dossier page in light, dark and mobile | pass (TripHero, destination photography, package tabs, budget meter, photographic trip cover, underline tabs; no fallback, no console/5xx errors) |
 | Built Worker under local workerd + `scripts/ui-smoke.mjs` (headless Chromium): all pages, trip→packages, quote, mobile public page, signed-out redirect, no console/API errors | pass |
+| Traveller API smoke (`scripts/traveler-smoke.mjs`): personal workspace → trip → confirmed itinerary → budget → generated packing → note → share → anonymous public view → revoke → 404 | pass |
+| Traveller browser smoke (`scripts/traveler-ui-smoke.mjs`): landing → join → wizard → dossier → budget → packing → notes → share/public page → OpenUI planner → stays → itinerary → discover → profile → sign out/in, no page or API errors | pass |
 | Deployment to Cloudflare | **not performed** |
 
 ## Defects found by verification and fixed (selection)
 Admin routes shadowed all tenant routes; unused SQL parameter in `scope=own` listing; clock mismatch between API and DB layer; Budget Explorer not cost-minimising; Premium losing its combination to a balanced objective; supplier cost leaking to users without margin visibility (cost + selling price reveals margin); admin role escalation by non-owners; indicative-only shares exposing net amounts; approving a rejected quote version; partial pricing overrides resetting defaults; extra quote items dropped on revision; parser misses ("family of 4", trip-length nights).
 
 ## Not implemented / known limitations
-- **No real booking or reservation workflow** (by design; offers are never presented as bookings). `booked` exists only as a state name.
+- **No real booking or reservation workflow** (by design; offers are never presented as bookings). `booked` exists only as a state name. This applies to the individual traveller product too.
+- **Traveller chat history is browser-local** (last 20 turns per trip, `localStorage`); it does not sync devices and the server still stores no transcripts. Traveller trips can be archived, not permanently deleted from the UI. Stay search needs an enabled provider. The traveller country selector is a practical shortlist while the API accepts any ISO alpha-2 code. Budget totals never convert unlike currencies; the UI warns instead.
 - **Booking.com, Expedia Rapid, Agoda and others are NOT connected.** Booking.com's Demand API (accommodations is a beta) and Expedia Rapid are partner-gated: they need an approved partnership or certification before credentials exist, and their response schemas were not available to build against. Adapters should be written once sandbox access is granted. Scraping these sites is not an option (terms of service).
 - **Amadeus Self-Service adapter** is written from the published OpenAPI specs and fixture-tested (9 tests) but has never run against the live API; it needs `AMADEUS_CLIENT_ID/SECRET`. Adults only, one-room pricing, no stars/reviews (see architecture.md).
 - **Hotelbeds** adapter is fixture-tested against documented shapes; real use needs credentials, sandbox testing and Hotelbeds certification. Amenities/reviews stay empty (content API not integrated).

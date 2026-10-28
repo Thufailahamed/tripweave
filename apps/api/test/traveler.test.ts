@@ -72,6 +72,17 @@ describe("traveller profile", () => {
   });
 });
 
+describe("traveller planning context", () => {
+  it("never exposes quote refs, quote actions or quote permission", async () => {
+    const h = new Harness();
+    const { c, tripId } = await travelerWithTrip(h);
+    const context = await c.ok<{ snapshot: { quotes: unknown[]; allowedActions: string[]; permissions: { canCreateQuotes: boolean } } }>("GET", `/trips/${tripId}/planning`);
+    expect(context.snapshot.quotes).toEqual([]);
+    expect(context.snapshot.allowedActions).not.toContain("open_quote");
+    expect(context.snapshot.permissions.canCreateQuotes).toBe(false);
+  });
+});
+
 describe("traveller budget", () => {
   it("creates, lists, updates and deletes budget items and scopes them to the traveller", async () => {
     const h = new Harness();

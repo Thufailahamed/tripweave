@@ -206,7 +206,7 @@ orgRoutes.post("/notifications/read", async (c) => {
 
 orgRoutes.get("/organizations/lookup", requirePermission("partners:manage"), async (c) => {
   const { slug } = parseQuery(c, z.object({ slug: z.string().min(2).max(60) }));
-  const found = await c.get("db").prepare("SELECT id, name, organization_type FROM organizations WHERE slug = ? AND status = 'active'").bind(slug.toLowerCase()).first<{ id: string; name: string; organization_type: string }>();
+  const found = await c.get("db").prepare("SELECT id, name, organization_type FROM organizations WHERE slug = ? AND status = 'active' AND account_kind = 'business'").bind(slug.toLowerCase()).first<{ id: string; name: string; organization_type: string }>();
   if (!found) throw new AppError("not_found", "No organisation with that slug");
   return ok(c, { id: found.id, name: found.name, type: found.organization_type });
 });

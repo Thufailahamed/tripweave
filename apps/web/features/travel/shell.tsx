@@ -111,6 +111,14 @@ export function TravelShell({ children }: { children: React.ReactNode }) {
           </div>
         ) : null}
       </header>
+      {session && !session.user.emailVerified ? (
+        <div className="border-b border-border bg-accent-soft/70">
+          <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs md:px-8">
+            <p className="font-semibold text-foreground">Verify your email to keep planning across devices.</p>
+            <Link href="/travel/profile" className="font-semibold text-accent hover:underline">Resend verification</Link>
+          </div>
+        </div>
+      ) : null}
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 md:px-8 md:py-12">{children}</main>
       <footer className="border-t border-border">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between md:px-8">

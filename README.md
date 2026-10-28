@@ -20,6 +20,8 @@ pnpm dev:web                                        # Next.js on http://localhos
 
 Sign in with `demo@tripweave.example` / `Demo-Passw0rd1` (seed data, development only) or register a new organisation.
 
+**For individual travellers**, open [http://localhost:3000/travel](http://localhost:3000/travel) and create a free personal account. The traveller workspace has its own dashboard, trip wizard, OpenUI planner, itinerary, stay options, budget, packing, notes, private/share link and printable public page. It reuses the same trip engine as the operator product but a different, restricted workspace kind. See [docs/traveler.md](docs/traveler.md).
+
 The platform admin portal lives at `/admin`. Promote an account locally (never share this SQL with an environment you do not control):
 
 ```bash
@@ -40,6 +42,8 @@ pnpm typecheck               # all packages, API and web
 node scripts/ui-smoke.mjs     # headless-Chromium UI smoke (needs playwright-core + a running web app and the seeded API)
 node scripts/admin-ui-smoke.mjs # headless-Chromium pass over every platform-admin section (requires a seeded admin)
 node scripts/smoke.mjs       # end-to-end against a RUNNING API (local or deployed): register → hotels → optimise (Queue→Workflow) → quote → public link → PDF
+node scripts/traveler-smoke.mjs # end-to-end traveller API flow: register → trip → itinerary → budget → packing → notes → share → revoke
+node scripts/traveler-ui-smoke.mjs http://localhost:3000 # headless-Chromium traveller flow, including the OpenUI planner and public share
 ```
 
 ## Documentation
@@ -53,6 +57,7 @@ node scripts/smoke.mjs       # end-to-end against a RUNNING API (local or deploy
 | [docs/d1-scaling.md](docs/d1-scaling.md) | D1 limits and the growth plan |
 | [docs/frontend-conventions.md](docs/frontend-conventions.md) | UI rules |
 | [docs/openui-integration.md](docs/openui-integration.md) | OpenUI generative planning assistant: allowlist, server authority, streaming, validation and fallback |
+| [docs/traveler.md](docs/traveler.md) | Individual traveller product: workspace model, routes, data, sharing, planning and limitations |
 | [docs/status.md](docs/status.md) | Phase report: what is implemented, what is not, credentials/approvals needed |
 
 ## Credentials and approvals you must obtain

@@ -100,14 +100,14 @@ export function PlanningPanel({ tripId, mode = "operator", persistKey }: { tripI
   }, [initial.data, traveler]);
 
   React.useEffect(() => {
-    if (!persistKey || typeof window === "undefined") return;
+    if (!persistKey || typeof window === "undefined" || streaming) return;
     try {
       if (messages.length === 0) window.localStorage.removeItem(persistKey);
       else window.localStorage.setItem(persistKey, JSON.stringify(messages.slice(-20)));
     } catch {
       /* A full or unavailable storage must never break the planner. */
     }
-  }, [messages, persistKey]);
+  }, [messages, persistKey, streaming]);
 
   React.useEffect(() => {
     const node = scrollRef.current;
@@ -418,7 +418,7 @@ export function PlanningPanel({ tripId, mode = "operator", persistKey }: { tripI
                 <PlanningFallbackView snapshot={message.snapshot} reason={message.standardView ? "manual" : message.reason === "invalid" ? "invalid" : message.usedFallback ? "unavailable" : "error"} onRetry={retry} mode={mode} />
               ) : message.snapshot ? (
                 <GeneratedInterfaceBoundary snapshot={message.snapshot} mode={mode}>
-                  <PlanningProvider snapshot={message.snapshot}>
+                  <PlanningProvider snapshot={message.snapshot} mode={mode}>
                     <Renderer
                       library={library}
                       response={message.content}

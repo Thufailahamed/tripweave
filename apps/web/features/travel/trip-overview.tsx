@@ -88,8 +88,8 @@ function OverviewInner() {
       ) : null}
 
       <section className="grid overflow-hidden rounded-[1.6rem] border border-border bg-card lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="tw-travel-photo min-h-64 rounded-none">
-          <DestinationPhoto destination={destination} alt={destination} className="size-full" eager />
+        <div className="tw-travel-photo min-h-64 rounded-none lg:max-h-[480px]">
+          <DestinationPhoto destination={destination} alt={destination} className="size-full" eager placeholder="art" />
         </div>
         <div className="flex flex-col justify-between gap-6 p-6 md:p-8">
           <div>
@@ -145,7 +145,7 @@ function OverviewInner() {
                 ))}
               </ol>
               {itinerary.stops.some((stop) => stop.latitude !== null && stop.longitude !== null) ? (
-                <ItineraryMap stops={itinerary.stops.map((stop) => ({ key: stop.id, destination: stop.destination, latitude: stop.latitude, longitude: stop.longitude }))} compact />
+                <div className="h-56 overflow-hidden rounded-xl"><ItineraryMap stops={itinerary.stops.map((stop) => ({ key: stop.id, destination: stop.destination, latitude: stop.latitude, longitude: stop.longitude }))} compact /></div>
               ) : null}
             </>
           ) : (

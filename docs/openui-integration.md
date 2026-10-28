@@ -265,3 +265,26 @@ The packages page composes an OpenUI story from one optimisation run, above the 
 - Each page visit that has packages composes a new story (one model call). The turn is rate limited to 30 per user per hour. Nothing is cached server-side; the reader can compose again with a focus.
 - A reader focus is stored only in the request and the prompt, never in the database or audit log.
 - The e2e check is `node scripts/package-showcase-e2e.mjs <screenshot-dir>`. It seeds hotels, a trip and an optimisation run through the API, then checks the rendered prices against the API's packages, the mobile layout and the console. Start the e2e API server (`apps/api/test/e2e/serve.ts`) and the web dev server first; the scripted model composes a presentation from the refs in CONTEXT.
+
+## Individual traveller mode
+
+The personal trip planner at `/travel` reuses the same planning endpoint and the same
+shared allowlist. `PlanningPanel` accepts `mode: "operator" | "traveler"` (default
+operator) and an optional `persistKey`:
+
+- Before any renderer sees a snapshot, traveller mode removes the `open_quote` action and
+  sets `canCreateQuotes` false. The quote component is not added to the library or
+  exposed to the model.
+- `open_packages` and `open_optimise` route to `/travel/trips/:id/stays`;
+  `open_itinerary` routes to `/travel/trips/:id/itinerary`.
+- `PlanningFallbackView` takes the same mode and labels the links "Stays", "Find stays"
+  and "Itinerary" for a traveller.
+- `QuickActions` reads the mode from `PlanningProvider` and labels the package action
+  "Stay ideas" and the optimisation action "Find stays".
+- `persistKey` stores the last 20 turns in browser `localStorage`; New chat clears it.
+  The API still does not persist prompts or transcripts.
+
+The server-side authority boundary is unchanged: the traveller receives a
+permission-filtered snapshot, the model sees short refs only, and the same validator,
+repair and deterministic fallback apply. The traveller browser smoke is
+`node scripts/traveler-ui-smoke.mjs http://localhost:3000`.

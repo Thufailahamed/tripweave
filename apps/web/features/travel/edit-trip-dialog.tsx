@@ -56,7 +56,8 @@ export function EditTripDialog({ trip, open, onOpenChange, onSaved }: { trip: Tr
     if (!arrivalDate || !departureDate) next.departureDate = "Both dates are required.";
     else if (departureDate <= arrivalDate) next.departureDate = "Departure must be after arrival.";
     if (adults < 1) next.adults = "At least one adult.";
-    const ages = childAges.slice(0, children).map(Number);
+    const rawAges = childAges.slice(0, children);
+    const ages = rawAges.map((age) => (age.trim() === "" ? Number.NaN : Number(age)));
     if (children > 0 && (ages.length !== children || ages.some((age) => !Number.isInteger(age) || age < 0 || age > 17))) next.childAges = "Add an age (0–17) for every child.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;

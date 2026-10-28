@@ -64,7 +64,8 @@ export function TripWizard() {
     if (!departureDate) nextErrors.departureDate = "Choose a departure date.";
     if (arrivalDate && departureDate && departureDate <= arrivalDate) nextErrors.departureDate = "Departure must be after arrival.";
     if (!Number.isFinite(adults) || adults < 1) nextErrors.adults = "At least one adult.";
-    const ageNumbers = childAges.slice(0, children).map((age) => Number(age));
+    const rawAges = childAges.slice(0, children);
+    const ageNumbers = rawAges.map((age) => (age.trim() === "" ? Number.NaN : Number(age)));
     if (children > 0 && (ageNumbers.length !== children || ageNumbers.some((age) => !Number.isInteger(age) || age < 0 || age > 17))) {
       nextErrors.childAges = "Add an age (0–17) for every child.";
     }
@@ -132,7 +133,7 @@ export function TripWizard() {
             <Field label="Trip title" htmlFor="trip-title" error={errors.title} hint="Optional; we will make one from the first place.">
               <Input id="trip-title" maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Hill country and the coast" />
             </Field>
-            <Field label="Who is going" htmlFor="trip-party" error={errors.adults}>
+            <Field label="Who is going" htmlFor="trip-adults" error={errors.adults}>
               <div className="grid grid-cols-2 gap-2">
                 <Input id="trip-adults" type="number" min={1} max={60} value={adults} onChange={(event) => setAdults(Math.max(1, Math.min(60, Number(event.target.value) || 1)))} aria-label="Adults" />
                 <Input id="trip-children" type="number" min={0} max={40} value={children} onChange={(event) => setChildCount(Math.max(0, Math.min(40, Number(event.target.value) || 0)))} aria-label="Children" />

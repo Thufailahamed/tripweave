@@ -57,10 +57,10 @@ export default function TravelLandingPage() {
           <div className="relative mx-auto w-full max-w-xl">
             <div className="grid grid-cols-2 gap-4">
               <div className="tw-travel-photo aspect-[4/5] translate-y-8">
-                <DestinationPhoto destination="Kandy" alt="Kandy, Sri Lanka" className="size-full" eager />
+                <DestinationPhoto destination="Kandy" alt="Kandy, Sri Lanka" className="size-full" placeholder="art" eager />
               </div>
               <div className="tw-travel-photo aspect-[4/5]">
-                <DestinationPhoto destination="Ella" alt="Ella, Sri Lanka" className="size-full" eager />
+                <DestinationPhoto destination="Ella" alt="Ella, Sri Lanka" className="size-full" placeholder="art" eager />
               </div>
             </div>
             <div className="tw-travel-card absolute -bottom-4 left-4 right-4 p-4 md:-left-8 md:right-10 md:p-5">
@@ -110,7 +110,7 @@ export default function TravelLandingPage() {
       <section className="px-4 py-20 md:px-8 md:py-28">
         <div className="mx-auto grid w-full max-w-7xl gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
           <div className="tw-travel-photo relative aspect-[4/5] max-h-[640px]">
-            <DestinationPhoto destination="Ella" alt="The hills around Ella" className="size-full" />
+            <DestinationPhoto destination="Ella" alt="The hills around Ella" className="size-full" placeholder="art" />
             <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-white/30 bg-[#211d17]/80 p-4 text-[#fffdf8] backdrop-blur">
               <p className="tw-travel-hand text-2xl">the train is the point</p>
               <p className="mt-1 text-xs text-white/70">A note from your plan, not a booking.</p>
@@ -175,7 +175,7 @@ export default function TravelLandingPage() {
               <div key={place} className="group">
                 <Link href="/travel/join">
                   <div className="tw-travel-photo aspect-[4/5]">
-                    <DestinationPhoto destination={place} alt={place} className="size-full" />
+                    <DestinationPhoto destination={place} alt={place} className="size-full" placeholder="art" />
                   </div>
                   <div className="mt-3 flex items-baseline justify-between gap-2">
                     <p className="tw-travel-display text-2xl">{place}</p>

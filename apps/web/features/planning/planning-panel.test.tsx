@@ -163,7 +163,7 @@ describe("PlanningPanel", () => {
     renderPanel({ mode: "traveler" });
     await screen.findByRole("heading", { name: "What shall we plan next?" });
     await user.click(screen.getByRole("button", { name: "Summarise the trip" }));
-    const open = await screen.findByRole("button", { name: /Packages/i });
+    const open = await screen.findByRole("button", { name: /Stay ideas/i });
     await user.click(open);
     expect(push).toHaveBeenCalledWith("/travel/trips/trip_1/stays");
   });

@@ -27,6 +27,7 @@ export default function TravelTripsPage() {
     .filter((trip) => trip.arrivalDate && trip.arrivalDate >= today)
     .sort((a, b) => (a.arrivalDate ?? "").localeCompare(b.arrivalDate ?? ""));
   const nextTrip = upcoming[0] ?? trips[0] ?? null;
+  const nextDestination = nextTrip ? tripDestination({ title: nextTrip.title, parseResult: nextTrip.parseResult }) : "";
   const others = trips.filter((trip) => trip.id !== nextTrip?.id);
   const countdown = daysUntil(nextTrip?.arrivalDate);
   const firstName = session?.user.displayName.split(/\s+/)[0] ?? "traveller";
@@ -66,8 +67,8 @@ export default function TravelTripsPage() {
 
       {nextTrip ? (
         <section aria-labelledby="next-trip" className="grid overflow-hidden rounded-[1.8rem] border border-border bg-card lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="tw-travel-photo min-h-72 rounded-none">
-            <DestinationPhoto destination={tripDestination({ title: nextTrip.title, parseResult: nextTrip.parseResult })} alt={nextTrip.title} className="size-full" eager />
+          <div className="tw-travel-photo min-h-72 rounded-none lg:max-h-[520px]">
+            <DestinationPhoto destination={tripDestination({ title: nextTrip.title, parseResult: nextTrip.parseResult })} alt={nextTrip.title} className="size-full" eager placeholder="art" />
           </div>
           <div className="flex flex-col justify-between gap-6 p-6 md:p-8">
             <div>
@@ -77,7 +78,7 @@ export default function TravelTripsPage() {
               </div>
               <h2 id="next-trip" className="tw-travel-display mt-3 text-4xl leading-[0.98] tracking-[-0.04em] md:text-5xl">{nextTrip.title}</h2>
               <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5"><MapPin className="size-4" /> {tripDestination({ title: nextTrip.title, parseResult: nextTrip.parseResult })}</span>
+                <span className="inline-flex items-center gap-1.5"><MapPin className="size-4" /> {nextDestination === nextTrip.title ? "Route not set" : nextDestination}</span>
                 <span>{dateRange(nextTrip.arrivalDate, nextTrip.departureDate)}</span>
               </p>
               <p className="mt-2 text-sm text-muted-foreground">{nextTrip.party.adults + nextTrip.party.children} traveller{nextTrip.party.adults + nextTrip.party.children === 1 ? "" : "s"} · {nextTrip.party.rooms.length} room{nextTrip.party.rooms.length === 1 ? "" : "s"}</p>

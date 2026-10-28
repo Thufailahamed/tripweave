@@ -14,7 +14,7 @@ export function TravelTripCard({ trip }: { trip: Trip }) {
   return (
     <Link href={`/travel/trips/${trip.id}`} className="group flex flex-col overflow-hidden rounded-[1.4rem] border border-border bg-card transition-transform duration-300 hover:-translate-y-1">
       <div className="tw-travel-photo relative aspect-[5/3] rounded-none">
-        <DestinationPhoto destination={destination} alt={destination} className="size-full" />
+        <DestinationPhoto destination={destination} alt={destination} className="size-full" placeholder="art" />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent p-4 pt-12 text-white">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/70">{dateRange(trip.arrivalDate, trip.departureDate)}</p>
           <div className="mt-1 flex items-end justify-between gap-3">

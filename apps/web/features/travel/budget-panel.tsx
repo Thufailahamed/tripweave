@@ -142,6 +142,7 @@ export function TravelBudgetPanel() {
           <p className="tw-travel-eyebrow">Trip budget</p>
           <p className="tw-num mt-2 text-3xl font-semibold">{trip.budgetAmountMinor === null ? "Not set" : money(trip.budgetAmountMinor, trip.budgetCurrency)}</p>
           <div className="mt-3 flex items-end gap-2">
+            <label htmlFor="trip-budget-amount" className="sr-only">Trip budget amount</label>
             <MoneyInput valueMinor={budgetInput} onMinorChange={setBudgetInput} currency={trip.budgetCurrency} id="trip-budget-amount" />
             <Button type="button" size="sm" variant="outline" loading={savingBudget} onClick={() => void saveBudget()}>Save</Button>
           </div>

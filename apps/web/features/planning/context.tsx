@@ -3,9 +3,18 @@ import * as React from "react";
 import type { PlanningPackageView, PlanningSnapshot } from "@tripweave/planning-contract";
 
 const PlanningSnapshotContext = React.createContext<PlanningSnapshot | null>(null);
+const PlanningModeContext = React.createContext<"operator" | "traveler">("operator");
 
-export function PlanningProvider({ snapshot, children }: { snapshot: PlanningSnapshot; children: React.ReactNode }) {
-  return <PlanningSnapshotContext.Provider value={snapshot}>{children}</PlanningSnapshotContext.Provider>;
+export function PlanningProvider({ snapshot, mode = "operator", children }: { snapshot: PlanningSnapshot; mode?: "operator" | "traveler"; children: React.ReactNode }) {
+  return (
+    <PlanningSnapshotContext.Provider value={snapshot}>
+      <PlanningModeContext.Provider value={mode}>{children}</PlanningModeContext.Provider>
+    </PlanningSnapshotContext.Provider>
+  );
+}
+
+export function usePlanningMode(): "operator" | "traveler" {
+  return React.useContext(PlanningModeContext);
 }
 
 export function usePlanningSnapshot(): PlanningSnapshot {

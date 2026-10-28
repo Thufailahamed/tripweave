@@ -1,6 +1,5 @@
 "use client";
 import * as React from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, ExternalLink, Link2, Printer, ShieldCheck, Trash2 } from "lucide-react";
@@ -8,8 +7,7 @@ import { toast } from "sonner";
 import type { TravelerShare } from "@tripweave/shared";
 import { Alert, Badge, LoadingBlock } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Field, Select } from "@/components/ui/form";
-import { Checkbox } from "@/components/ui/form";
+import { Checkbox, Field, Select } from "@/components/ui/form";
 import { ConfirmDialog } from "@/components/ui/overlay";
 import { apiDelete, apiPost, errorMessage } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
@@ -93,12 +91,12 @@ export function TravelSharePanel() {
             <code className="min-w-0 flex-1 break-all text-xs">{link}</code>
             <div className="flex shrink-0 gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => void copy()}>{copied ? <Check className="size-4" /> : <Copy className="size-4" />} {copied ? "Copied" : "Copy"}</Button>
-              <Button asChild size="sm" variant="ghost"><Link href={link} target="_blank" rel="noreferrer noopener"><ExternalLink className="size-4" /> Open</Link></Button>
+              <Button asChild size="sm" variant="ghost"><a href={link} target="_blank" rel="noreferrer noopener"><ExternalLink className="size-4" /> Open</a></Button>
             </div>
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">For security, we only show a share link once. If you lose it, revoke it and create a new one. Anyone with the link can read the trip until it expires or is revoked.</p>
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline"><Link href={link} target="_blank" rel="noreferrer noopener"><Printer className="size-4" /> Print preview</Link></Button>
+            <Button asChild variant="outline"><a href={link} target="_blank" rel="noreferrer noopener"><Printer className="size-4" /> Print preview</a></Button>
           </div>
         </section>
       ) : null}

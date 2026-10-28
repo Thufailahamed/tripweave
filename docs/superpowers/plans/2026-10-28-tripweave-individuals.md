@@ -1,6 +1,6 @@
 # TripWeave for Individuals Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add a complete personal trip-planning product for individual travellers: registration, trip creation from an idea, OpenUI planning, editable itinerary, stay options, budget, packing, notes, sharing and print.
 
@@ -60,7 +60,7 @@
   - `Harness.registerTraveler(name, email?)`.
 - API contract: `POST /api/v1/auth/register-traveler` returns 201 `{ data: SessionDescription }` with `organization.accountKind === "individual"` and `organization.role === "staff"`.
 
-- [ ] **Step 1: Write the failing API test**
+- [x] **Step 1: Write the failing API test**
 
 In `apps/api/test/traveler.test.ts`, add:
 
@@ -91,12 +91,12 @@ describe("traveller workspaces", () => {
 
 `/traveler/profile` will exist in Task 2; keep the second test skipped until then or add it in Task 2. For Task 1, assert `requireTraveler` via a temporary route? Better move the 403 test to Task 2. Keep only the first test in Task 1.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `pnpm vitest run apps/api/test/traveler.test.ts`
 Expected: FAIL because `registerTraveler` and `/auth/register-traveler` do not exist.
 
-- [ ] **Step 3: Add the migration**
+- [x] **Step 3: Add the migration**
 
 Create `migrations/0010_traveler.sql` with:
 
@@ -157,11 +157,11 @@ CREATE TABLE trip_shares (
 CREATE INDEX idx_trip_shares_trip ON trip_shares (organization_id, trip_request_id, revoked_at, expires_at);
 ```
 
-- [ ] **Step 4: Add shared contracts**
+- [x] **Step 4: Add shared contracts**
 
 In `packages/shared/src/traveler.ts` define the categories, pace, interfaces and Zod schemas listed in the Interfaces block. Use `SUPPORTED_CURRENCIES` from `./money` for currency enums and exercise the same password rule as `passwordSchema` (`min(10).max(200)` with at least one letter and one digit). Export it from `packages/shared/src/index.ts`.
 
-- [ ] **Step 5: Extend the identity repository**
+- [x] **Step 5: Extend the identity repository**
 
 Add `accountKind` to `OrganizationRow` and map `r.account_kind`. Add
 `organizationAccountKind` to `MembershipRow`, select it in `listUserMemberships` and
@@ -191,7 +191,7 @@ Add `updateUserDisplayName(db, userId, displayName)` updating `users.display_nam
 
 Export the new repo as `export * as traveler from "./repos/traveler";` when Task 2 adds it.
 
-- [ ] **Step 6: Wire the session and middleware**
+- [x] **Step 6: Wire the session and middleware**
 
 In `apps/api/src/env.ts` add `accountKind: AccountKind | null` to `AuthContext`.
 
@@ -222,7 +222,7 @@ In `routes/auth.ts`:
   membership/organisation.
 - `login` needs no request change; the default redirect is a web concern.
 
-- [ ] **Step 7: Add the harness helper**
+- [x] **Step 7: Add the harness helper**
 
 In `apps/api/test/harness.ts` add:
 
@@ -242,12 +242,12 @@ async registerTraveler(name: string, email?: string): Promise<Client> {
 }
 ```
 
-- [ ] **Step 8: Run the test and fix the seam**
+- [x] **Step 8: Run the test and fix the seam**
 
 Run: `pnpm vitest run apps/api/test/traveler.test.ts`
 Expected: PASS. Then run `pnpm vitest run apps/api/test/e2e.test.ts apps/api/test/mfa.test.ts` to confirm existing registration/session tests still pass.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add migrations/0010_traveler.sql packages/shared/src packages/database/src apps/api/src/env.ts apps/api/src/middleware/auth.ts apps/api/src/routes/auth.ts apps/api/test/harness.ts apps/api/test/traveler.test.ts
@@ -280,7 +280,7 @@ git commit -m "feat(traveler): add personal workspaces and traveller identity"
   - `POST /trips/:id/shares` returns `{ share, url }`; only the SHA-256 hash is stored.
 - Request bodies use the shared traveler schemas. `POST /packing/generate` takes `{}` and is idempotent by label.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Extend `apps/api/test/traveler.test.ts` with a setup helper that creates a traveller,
 creates a trip (two adults, 2026-12-10 → 2026-12-14), saves a two-stop itinerary, and
@@ -298,12 +298,12 @@ Assert:
   the same share disappear.
 - Business account receives 403 from `/traveler/profile`.
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `pnpm vitest run apps/api/test/traveler.test.ts`
 Expected: FAIL on missing routes.
 
-- [ ] **Step 3: Implement the repository**
+- [x] **Step 3: Implement the repository**
 
 Create `packages/database/src/repos/traveler.ts`. Use `newId`, `nowIso`, `query`,
 `queryOne`, `execute`, `batch`, `stmt`, `str`, `num`, `numOrNull`, `toJson`/`parseJson`
@@ -319,7 +319,7 @@ the input, and inserts only missing labels in one batch.
 
 Export the repo from `packages/database/src/index.ts`.
 
-- [ ] **Step 4: Implement the router**
+- [x] **Step 4: Implement the router**
 
 Create `apps/api/src/routes/traveler.ts` with `travelerRoutes.use("*", requireTraveler)`.
 Use `mustTrip(c, id)` to verify ownership before any child-table operation.
@@ -345,12 +345,12 @@ Shares:
 
 Mount `v1.route("/traveler", travelerRoutes)` in `apps/api/src/app.ts` after `/public`.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `pnpm vitest run apps/api/test/traveler.test.ts`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/database/src/repos/traveler.ts packages/database/src/index.ts apps/api/src/routes/traveler.ts apps/api/src/app.ts apps/api/test/traveler.test.ts
@@ -371,7 +371,7 @@ git commit -m "feat(traveler): add budget, packing, notes, profile and share API
 - Never returns duplicates; always includes documents, medication, chargers and a
   reusable bottle. Adds activity keywords: `hike|trail|walk` → walking shoes; `beach|swim|snorkel|dive` → swimwear and dry bag; `temple|shrine` → modest clothing; `safari` → neutral clothing and binoculars. Trips over 7 nights add a laundry bag.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -395,22 +395,22 @@ describe("suggestPackingItems", () => {
 });
 ```
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `pnpm vitest run apps/api/src/services/traveler-packing.test.ts`
 Expected: FAIL because the module does not exist.
 
-- [ ] **Step 3: Implement and wire**
+- [x] **Step 3: Implement and wire**
 
 Implement the pure function. In the router, load the trip and latest itinerary, call the
 service, then `addPackingItemsIfMissing`. Return `{ added, items }`.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `pnpm vitest run apps/api/src/services/traveler-packing.test.ts apps/api/test/traveler.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/services/traveler-packing.ts apps/api/src/services/traveler-packing.test.ts apps/api/src/routes/traveler.ts
@@ -431,7 +431,7 @@ git commit -m "feat(traveler): generate activity-aware packing lists"
   unknown/expired/revoked tokens; increments `view_count` and audits `trip.shared_viewed`.
 - View shape: `{ generatedAt, trip: { title, description, arrivalDate, departureDate, party }, itinerary, budget: null | { currency, totalMinor, categories } }`.
 
-- [ ] **Step 1: Add failing tests**
+- [x] **Step 1: Add failing tests**
 
 In `apps/api/test/traveler.test.ts`:
 - Create a share with `includeBudget: true`; fetch it with an anonymous client; assert
@@ -441,12 +441,12 @@ In `apps/api/test/traveler.test.ts`:
 - Revoke and assert 404; advance the harness clock beyond expiry and assert 404.
 - Create the same token path for two trips; assert each returns its own trip.
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `pnpm vitest run apps/api/test/traveler.test.ts`
 Expected: FAIL on the public route.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add a `publicRoutes.get("/trips/:token", rateLimit(...))` handler:
 - token length >= 30, hash, `getActiveShareByTokenHash`.
@@ -458,12 +458,12 @@ Add a `publicRoutes.get("/trips/:token", rateLimit(...))` handler:
   destination, dates, nights and activities.
 - Record view and audit. Do not expose the share id or organization id.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `pnpm vitest run apps/api/test/traveler.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/database/src/repos/traveler.ts apps/api/src/routes/public.ts apps/api/test/traveler.test.ts
@@ -500,7 +500,7 @@ git commit -m "feat(traveler): add read-only public trip sharing"
 - `TravelShell({ children })` is the authenticated top-nav shell.
 - `/travel` is public; `/travel/trips` and below require a traveller session.
 
-- [ ] **Step 1: Add the visual theme**
+- [x] **Step 1: Add the visual theme**
 
 Append a `.tw-travel` block to `globals.css` that overrides the semantic tokens to a warm
 paper palette (`--background #f6f1e7`, `--foreground #1f1b16`, `--card #fffdf8`,
@@ -515,7 +515,7 @@ Instrument Serif and `.tw-travel .tw-hand` to Caveat, and adds print rules:
 }
 ```
 
-- [ ] **Step 2: Build the public landing and auth pages**
+- [x] **Step 2: Build the public landing and auth pages**
 
 The landing at `/travel` uses `DestinationPhoto` for a hero, a serif headline, three
 sample days, feature panels (plan, stays, budget, packing, share), a destination strip
@@ -525,7 +525,7 @@ trips" for an existing traveller session.
 `/travel/join` posts to `/auth/register-traveler`, then sets the session query and routes
 to `/travel/trips/new`. `/travel/signin` uses the shared `SignInForm`.
 
-- [ ] **Step 3: Build the authenticated shell and gate**
+- [x] **Step 3: Build the authenticated shell and gate**
 
 `(travel)/travel/(app)/layout.tsx`:
 - `useSession()`; null → `/travel/signin?next=<path>`.
@@ -537,7 +537,7 @@ to `/travel/trips/new`. `/travel/signin` uses the shared `SignInForm`.
 New trip, avatar/name menu and sign out; mobile drawer; footer.
 Use `apiPost("/auth/logout")`, clear the query cache, and route to `/travel/signin`.
 
-- [ ] **Step 4: Refactor sign-in and redirects**
+- [x] **Step 4: Refactor sign-in and redirects**
 
 Move the password/MFA state machine from `(auth)/login/page.tsx` into
 `features/auth/sign-in-form.tsx`. The existing page keeps its layout and uses the shared
@@ -549,7 +549,7 @@ In `(app)/layout.tsx`, redirect `session.organization?.accountKind === "individu
 business sessions to `/dashboard`. Add "For travellers" links in the marketing header and
 footer pointing to `/travel`.
 
-- [ ] **Step 5: Typecheck and commit**
+- [x] **Step 5: Typecheck and commit**
 
 Run: `pnpm --filter @tripweave/web typecheck`
 Expected: PASS.
@@ -582,17 +582,17 @@ git commit -m "feat(traveler): add traveller landing, auth and shell"
 - Hooks: `useTravelerTrips`, `useBudgetItems`, `usePackingItems`, `useTripNotes`,
   `useTripShares`, `useTravelerProfile`, with keys under `["traveler", ...]`.
 
-- [ ] **Step 1: Write failing helper tests**
+- [x] **Step 1: Write failing helper tests**
 
 Test room allocation for 2 adults/1 child, 5 adults; budget totals with no budget and
 mixed currencies; packing percent clamps to 100; daysUntil for future/past/no date.
 
-- [ ] **Step 2: Implement helpers and run tests**
+- [x] **Step 2: Implement helpers and run tests**
 
 Run: `pnpm vitest run apps/web/features/travel/lib.test.ts`
 Expected: PASS.
 
-- [ ] **Step 3: Build the dashboard**
+- [x] **Step 3: Build the dashboard**
 
 `/travel/trips` shows:
 - greeting and a "Where to next?" composer that routes to
@@ -602,14 +602,14 @@ Expected: PASS.
   budget and latest status;
 - a small discovery strip.
 
-- [ ] **Step 4: Build discovery**
+- [x] **Step 4: Build discovery**
 
 `/travel/discover` uses a curated list of destinations and `usePlaceInfos` (existing
 `features/planning/place-image`) to fetch Wikipedia extracts and images. A search field
 uses `lookupPlace` for a free-text place and appends the result. Each card has "Plan this
 trip" → `/travel/trips/new?destination=<name>&idea=<encoded idea>`.
 
-- [ ] **Step 5: Typecheck and commit**
+- [x] **Step 5: Typecheck and commit**
 
 Run: `pnpm --filter @tripweave/web typecheck`
 
@@ -639,26 +639,26 @@ git commit -m "feat(traveler): add dashboard, discovery and helpers"
 - `EditTripDialog({ trip, open, onOpenChange })` patches title, dates, party, budget,
   budget currency and preferred hotel category.
 
-- [ ] **Step 1: Extend helper tests**
+- [x] **Step 1: Extend helper tests**
 
 Test `createTripFromWizard` with a fake API: parse success creates a route; parse failure
 still returns the trip id with a warning; no idea skips parse; destinations fallback calls
 suggest.
 
-- [ ] **Step 2: Implement the wizard**
+- [x] **Step 2: Implement the wizard**
 
 The page reads `idea`, `destination` and `welcome` from search params inside a Suspense
 boundary. The form collects idea, title, destinations (TagInput), dates, adults, children,
 budget, currency, stay style, pace and interests. It shows a four-stage progress list and
 a summary panel. On success, routes to `/travel/trips/:id?created=1`.
 
-- [ ] **Step 3: Implement edit dialog**
+- [x] **Step 3: Implement edit dialog**
 
 Use `PATCH /trips/:id`; rooms are allocated with `allocateTravelerRooms`; on success
 invalidate `tripKeys.detail(id)`, `tripKeys.itinerary(id)` and the traveller trip list.
 Display `ApiError.fieldErrors` inline.
 
-- [ ] **Step 4: Typecheck and commit**
+- [x] **Step 4: Typecheck and commit**
 
 Run: `pnpm vitest run apps/web/features/travel/lib.test.ts && pnpm --filter @tripweave/web typecheck`
 
@@ -686,12 +686,12 @@ git commit -m "feat(traveler): add trip creation wizard and trip editor"
 - Archive action calls `PATCH /trips/:id { status: "archived" }` and returns to
   `/travel/trips`.
 
-- [ ] **Step 1: Implement the header and overview**
+- [x] **Step 1: Implement the header and overview**
 
 Use `DestinationPhoto`, `dateRange`, `money`, `Badge`. Keep loading and not-found states
 explicit. Make the tab bar horizontally scrollable on mobile with `aria-current`.
 
-- [ ] **Step 2: Typecheck and commit**
+- [x] **Step 2: Typecheck and commit**
 
 Run: `pnpm --filter @tripweave/web typecheck`
 
@@ -715,14 +715,14 @@ git commit -m "feat(traveler): add trip dossier and overview"
 - Suggest: `POST /trips/:id/itinerary/suggest` with destinations/nights, then save.
 - Map: dynamic import of `features/trips/itinerary-map`.
 
-- [ ] **Step 1: Implement the editor**
+- [x] **Step 1: Implement the editor**
 
 Load `useItineraryView`. If empty, show a destination input and "Suggest a route".
 Otherwise render ordered cards with `PlaceInput`, date inputs, an activities textarea
 (one per line), notes, up/down/delete buttons, and a map. The user can add a stop. Saving
 invalidates `tripKeys.itinerary(id)` and `tripKeys.detail(id)`.
 
-- [ ] **Step 2: Typecheck and commit**
+- [x] **Step 2: Typecheck and commit**
 
 Run: `pnpm --filter @tripweave/web typecheck`
 
@@ -749,12 +749,12 @@ git commit -m "feat(traveler): add editable itinerary and map"
 - Poll `GET /optimisations/:id` with `useJob`; refresh packages when it settles.
 - "Add stay estimate" creates a budget item with category `stay`.
 
-- [ ] **Step 1: Test the pure estimate helper**
+- [x] **Step 1: Test the pure estimate helper**
 
 Test a package with pricing returns the selling price and all hotel names; a package
 without pricing returns null.
 
-- [ ] **Step 2: Implement the panel**
+- [x] **Step 2: Implement the panel**
 
 Require a confirmed itinerary before enabling "Find stays"; show a link to the itinerary
 and a one-click "Confirm itinerary" only when there are no blocking issues. Show job
@@ -762,7 +762,7 @@ progress, infeasible/failed states with the existing funnel data, then package c
 hotel names per stop, selling price, per-night, within-budget badge, verification state,
 and "Add stay estimate". Always state that prices are not a booking.
 
-- [ ] **Step 3: Typecheck, test and commit**
+- [x] **Step 3: Typecheck, test and commit**
 
 Run: `pnpm vitest run apps/web/features/travel/lib.test.ts && pnpm --filter @tripweave/web typecheck`
 
@@ -792,23 +792,23 @@ git commit -m "feat(traveler): add stay options and budget handoff"
 - Profile: display name, home city, country, currency, interests, pace, dietary notes,
   change password, resend verification, sign out.
 
-- [ ] **Step 1: Implement budget**
+- [x] **Step 1: Implement budget**
 
 Show planned, paid and remaining; if mixed currency, show a warning and per-currency
 totals. Add form uses `MoneyInput`; category select. Inline edit with save/cancel.
 
-- [ ] **Step 2: Implement packing**
+- [x] **Step 2: Implement packing**
 
 Group items; checkbox toggles; delete; add; generate with a loading state. Progress is
 announced with `aria-live`.
 
-- [ ] **Step 3: Implement notes and profile**
+- [x] **Step 3: Implement notes and profile**
 
 Notes are a simple composer and timeline. Profile uses `GET/PATCH /traveler/profile`,
 `POST /auth/change-password` and `POST /auth/resend-verification`; on display-name change,
 invalidate the session query.
 
-- [ ] **Step 4: Typecheck and commit**
+- [x] **Step 4: Typecheck and commit**
 
 Run: `pnpm --filter @tripweave/web typecheck`
 
@@ -834,18 +834,18 @@ git commit -m "feat(traveler): add budget, packing, notes and profile"
 - Public page fetches `/public/trips/:token`; renders cover, title, dates, party,
   itinerary days, map and optional budget summary; `Print / save PDF` button.
 
-- [ ] **Step 1: Implement the share panel**
+- [x] **Step 1: Implement the share panel**
 
 After creating a link, show it once with a copy button and a warning that the link grants
 read-only access. List active shares with expiry and view count; revoke.
 
-- [ ] **Step 2: Implement the public document**
+- [x] **Step 2: Implement the public document**
 
 Use `useQuery` with `apiGet<TravelerPublicTripView>(`/public/trips/${token}`)`. On 404 show
 a calm "This link has expired" card. Use `.tw-travel` and `tw-no-print` on controls.
 Add `robots: { index: false, follow: false }` metadata in the layout.
 
-- [ ] **Step 3: Typecheck and commit**
+- [x] **Step 3: Typecheck and commit**
 
 Run: `pnpm --filter @tripweave/web typecheck`
 
@@ -874,7 +874,7 @@ git commit -m "feat(traveler): add share links and printable public trip"
 - `persistKey` stores the last 20 turns in localStorage; New chat clears it. Storage
   failures are ignored.
 
-- [ ] **Step 1: Add failing tests**
+- [x] **Step 1: Add failing tests**
 
 In `planning-panel.test.tsx`:
 - Render traveller mode, trigger `open_packages`, assert `router.push` received
@@ -882,26 +882,26 @@ In `planning-panel.test.tsx`:
 - Assert `open_quote` is not offered/rendered.
 - Render operator mode and assert `/trips/t1/packages` still works.
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `pnpm vitest run apps/web/features/planning/planning-panel.test.tsx`
 Expected: FAIL on the new props/routes.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add the props, a `scrubTravelerSnapshot` helper, route mapping, fallback mode and
 localStorage persistence. Keep all existing default behavior.
 
-- [ ] **Step 4: Create the plan page**
+- [x] **Step 4: Create the plan page**
 
 Use a dynamic import with `ssr: false` and `<PlanningPanel tripId={id} mode="traveler" persistKey={`tw.traveler.plan.${id}`} />`. Add a short page intro explaining that prices and availability come from the server.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `pnpm vitest run apps/web/features/planning/planning-panel.test.tsx`
 Expected: PASS, including all pre-existing tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/features/planning/planning-panel.tsx apps/web/features/planning/fallback-view.tsx apps/web/features/planning/planning-panel.test.tsx "apps/web/app/(travel)/travel/(app)/trips/[id]/plan/page.tsx"
@@ -925,22 +925,22 @@ git commit -m "feat(traveler): add OpenUI planning mode for personal trips"
 - `docs/status.md` lists the new traveller surface and its limitations.
 - `docs/openui-integration.md` documents traveller mode and route mapping.
 
-- [ ] **Step 1: Run the full test suite**
+- [x] **Step 1: Run the full test suite**
 
 Run: `pnpm test`
 Expected: all tests pass.
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `pnpm typecheck`
 Expected: pass.
 
-- [ ] **Step 3: Build the web app**
+- [x] **Step 3: Build the web app**
 
 Run: `pnpm --filter @tripweave/web build`
 Expected: production build passes.
 
-- [ ] **Step 4: Apply the local migration and smoke the UI**
+- [x] **Step 4: Apply the local migration and smoke the UI**
 
 Run:
 ```bash
@@ -952,7 +952,7 @@ Then in a browser: `/travel` → join → create a trip with an idea → open Pl
 Budget, Packing, Notes, Share → open the public link → print preview. Sign out and back
 in. Check the browser console and network tab for 4xx/5xx errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md docs/traveler.md docs/status.md docs/openui-integration.md
