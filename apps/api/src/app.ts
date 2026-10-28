@@ -15,6 +15,7 @@ import { publicRoutes } from "./routes/public";
 import { quoteRoutes } from "./routes/quotes";
 import { reportRoutes } from "./routes/reports";
 import { tripRoutes } from "./routes/trips";
+import { travelerRoutes } from "./routes/traveler";
 import { defaultBuildLlm, defaultBuildProviders } from "./services/providers";
 import { API_VERSION } from "./lib/version";
 
@@ -57,6 +58,7 @@ export function createApp(overrides: Partial<Deps> = {}) {
   v1.use("*", enforcePlatformAvailability);
   v1.route("/auth", authRoutes);
   v1.route("/public", publicRoutes);
+  v1.route("/traveler", travelerRoutes);
   v1.route("/admin", adminRoutes);
   v1.route("/customers", customerRoutes);
   v1.route("/", orgRoutes);
