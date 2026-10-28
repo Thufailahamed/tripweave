@@ -3,15 +3,16 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useSession } from "@/lib/session";
+import { isTravelerSession, useSession } from "@/lib/session";
 
-/** Header actions: swaps to "Open dashboard" when the visitor already has a session. */
+/** Header actions: swaps to the right workspace when the visitor already has a session. */
 export function HeaderActions() {
   const { data: session } = useSession();
   if (session) {
+    const traveler = isTravelerSession(session);
     return (
       <Button asChild size="sm">
-        <Link href={session.organization || !session.user.platformAdmin ? "/dashboard" : "/admin"}>Open dashboard</Link>
+        <Link href={traveler ? "/travel/trips" : session.organization || !session.user.platformAdmin ? "/dashboard" : "/admin"}>{traveler ? "Open my trips" : "Open dashboard"}</Link>
       </Button>
     );
   }
@@ -31,10 +32,11 @@ export function HeaderActions() {
 export function CtaButtons({ accent, center }: { accent?: boolean; center?: boolean }) {
   const { data: session } = useSession();
   if (session) {
+    const traveler = isTravelerSession(session);
     return (
       <Button asChild size="lg" variant={accent ? "accent" : "default"} className="group">
-        <Link href={session.organization || !session.user.platformAdmin ? "/dashboard" : "/admin"}>
-          Open dashboard <ArrowRight className="transition-transform duration-300 group-hover:translate-x-1" />
+        <Link href={traveler ? "/travel/trips" : session.organization || !session.user.platformAdmin ? "/dashboard" : "/admin"}>
+          {traveler ? "Open my trips" : "Open dashboard"} <ArrowRight className="transition-transform duration-300 group-hover:translate-x-1" />
         </Link>
       </Button>
     );

@@ -9,6 +9,7 @@ export interface SessionOrganization {
   name: string;
   slug: string;
   type: "tour_operator" | "hotel_management";
+  accountKind: "business" | "individual";
   status: string;
   defaultCurrency: string;
   timezone: string;
@@ -24,6 +25,10 @@ export interface SessionData {
 }
 
 export const SESSION_KEY = ["session"] as const;
+
+export function isTravelerSession(session: SessionData | null | undefined): boolean {
+  return session?.organization?.accountKind === "individual";
+}
 
 /** `data === null` means signed out; `undefined` while loading. */
 export function useSession() {

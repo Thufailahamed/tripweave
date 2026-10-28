@@ -28,6 +28,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           </div>
           <nav aria-label="Primary" className="ml-auto flex items-stretch">
             <div className="hidden items-center gap-6 px-6 text-sm sm:flex md:px-8">
+              <PlusLink href="/travel">For travellers</PlusLink>
               <PlusLink href="/features">Features</PlusLink>
               <PlusLink href="/privacy">Privacy</PlusLink>
             </div>
@@ -59,6 +60,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           <nav aria-label="Product" className="flex flex-col gap-1 text-3xl md:text-5xl">
             {[
               ["/features", "Features"],
+              ["/travel", "For travellers"],
               ["/register", "Get started"],
               ["/login", "Sign in"],
             ].map(([href, label], i) => (

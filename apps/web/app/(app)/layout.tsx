@@ -13,6 +13,7 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname();
   React.useEffect(() => {
     if (session === null) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+    else if (session?.organization?.accountKind === "individual") router.replace("/travel/trips");
     else if (session && !session.organization && session.user.platformAdmin && !pathname.startsWith("/admin") && !pathname.startsWith("/settings")) router.replace("/admin");
   }, [session, router, pathname]);
 
