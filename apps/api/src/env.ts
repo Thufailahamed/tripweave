@@ -1,4 +1,4 @@
-import type { Permission, Role, OrganizationType } from "@tripweave/shared";
+import type { AccountKind, Permission, Role, OrganizationType } from "@tripweave/shared";
 import type { Db, identity } from "@tripweave/database";
 import type { AiBinding, LlmClient } from "@tripweave/ai";
 import type { HotelProvider } from "@tripweave/provider-contracts";
@@ -75,6 +75,7 @@ export interface AuthContext {
   organizationId: string | null;
   organizationType: OrganizationType | null;
   organizationName: string | null;
+  accountKind: AccountKind | null;
   role: Role | null;
   permissions: ReadonlySet<Permission>;
   memberships: identity.MembershipRow[];

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
-import { AppError, forgotPasswordSchema, loginSchema, passwordSchema, registerSchema, resetPasswordSchema, switchOrganizationSchema, permissionsForRole } from "@tripweave/shared";
+import { AppError, forgotPasswordSchema, loginSchema, passwordSchema, registerSchema, resetPasswordSchema, switchOrganizationSchema, permissionsForRole, travelerRegisterSchema } from "@tripweave/shared";
 import { identity, ops } from "@tripweave/database";
 import type { Env, Vars } from "../env";
 import { hashPassword, randomToken, sha256Hex, verifyPassword } from "../lib/crypto";
@@ -56,7 +56,7 @@ export async function describeSession(c: AppContext) {
   const mfa = await identity.getMfa(c.get("db"), a.userId);
   return {
     user: { id: a.userId, email: a.email, displayName: a.displayName, platformAdmin: a.platformAdmin, emailVerified: a.emailVerified, mfaEnabled: !!mfa?.enabledAt },
-    organization: org && a.role ? { id: org.id, name: org.name, slug: org.slug, type: org.organizationType, status: org.status, defaultCurrency: org.defaultCurrency, timezone: org.timezone, country: org.country, branding: org.branding, role: a.role } : null,
+    organization: org && a.role ? { id: org.id, name: org.name, slug: org.slug, type: org.organizationType, accountKind: org.accountKind, status: org.status, defaultCurrency: org.defaultCurrency, timezone: org.timezone, country: org.country, branding: org.branding, role: a.role } : null,
     permissions: a.role ? permissionsForRole(a.role) : [],
     memberships: a.memberships.map((m) => ({ organizationId: m.organizationId, name: m.organizationName, type: m.organizationType, role: m.role, status: m.organizationStatus })),
   };
@@ -70,7 +70,7 @@ async function completeLogin(c: AppContext, user: identity.UserRow) {
   const first = memberships.find((m) => m.organizationStatus === "active") ?? memberships[0] ?? null;
   await startSession(c, user.id, first?.organizationId ?? null);
   await ops.writeAudit(db, { organizationId: first?.organizationId ?? null, actorUserId: user.id, action: "auth.login", resourceType: "user", resourceId: user.id, requestId: c.get("requestId") });
-  c.set("auth", { userId: user.id, email: user.email, displayName: user.displayName, platformAdmin: user.platformRole === "platform_admin", emailVerified: !!user.emailVerifiedAt, sessionId: "", organizationId: first?.organizationId ?? null, organizationType: first?.organizationType ?? null, organizationName: first?.organizationName ?? null, role: first?.role ?? null, permissions: new Set(first ? permissionsForRole(first.role) : []), memberships });
+  c.set("auth", { userId: user.id, email: user.email, displayName: user.displayName, platformAdmin: user.platformRole === "platform_admin", emailVerified: !!user.emailVerifiedAt, sessionId: "", organizationId: first?.organizationId ?? null, organizationType: first?.organizationType ?? null, organizationName: first?.organizationName ?? null, accountKind: first?.organizationAccountKind ?? null, role: first?.role ?? null, permissions: new Set(first ? permissionsForRole(first.role) : []), memberships });
   return ok(c, await describeSession(c));
 }
 
@@ -92,7 +92,43 @@ authRoutes.post("/register", rateLimit({ name: "register", limit: 10, windowSeco
   await ops.writeAudit(db, { organizationId, actorUserId: userId, action: "organization.created", resourceType: "organization", resourceId: organizationId, metadata: { type: body.organizationType }, requestId: c.get("requestId") });
   await startSession(c, userId, organizationId);
   await sendVerificationEmail(c, { id: userId, email });
-  c.set("auth", { userId, email, displayName: body.displayName, platformAdmin: false, emailVerified: false, sessionId: "", organizationId, organizationType: body.organizationType, organizationName: body.organizationName, role: "owner", permissions: new Set(permissionsForRole("owner")), memberships: await identity.listUserMemberships(db, userId) });
+  c.set("auth", { userId, email, displayName: body.displayName, platformAdmin: false, emailVerified: false, sessionId: "", organizationId, organizationType: body.organizationType, organizationName: body.organizationName, accountKind: "business", role: "owner", permissions: new Set(permissionsForRole("owner")), memberships: await identity.listUserMemberships(db, userId) });
+  return ok(c, await describeSession(c), 201);
+});
+
+authRoutes.post("/register-traveler", rateLimit({ name: "register-traveler", limit: 10, windowSeconds: 3600 }), async (c) => {
+  const body = await parseBody(c, travelerRegisterSchema);
+  const settings = await platformSettings(c.get("db"), c.get("deps").now().getTime());
+  if (settings.maintenanceMode) throw new AppError("maintenance", "TripWeave is undergoing scheduled maintenance. Please try again shortly.", { supportEmail: settings.supportEmail || undefined });
+  if (!settings.signupsEnabled) throw new AppError("forbidden", "New registrations are currently closed. Please contact support.");
+  if (!(await verifyTurnstile(c.env, c.get("deps"), body.turnstileToken, clientIp(c)))) throw new AppError("forbidden", "Human verification failed. Please try again.");
+  const db = c.get("db");
+  const email = body.email.toLowerCase();
+  if (await identity.findUserByEmail(db, email)) throw new AppError("conflict", "An account with this email already exists. Please sign in instead.");
+  const organizationName = `${body.displayName} travels`;
+  const { organizationId, userId } = await identity.createTravelerWorkspace(db, {
+    organizationName,
+    slug: await identity.uniqueSlug(db, organizationName),
+    country: body.country,
+    currency: body.defaultCurrency,
+    timezone: body.timezone,
+    user: { email, displayName: body.displayName, passwordHash: await hashPassword(body.password, c.get("deps").pbkdf2Iterations) },
+  });
+  await ops.setSetting(db, organizationId, "pricing", pricingConfigSchema.parse({}), userId);
+  await ops.setSetting(db, organizationId, "traveler", {
+    homeCity: body.homeCity,
+    country: body.country,
+    currency: body.defaultCurrency,
+    interests: body.interests,
+    pace: body.pace,
+    dietary: "",
+    notes: "",
+  }, userId);
+  await identity.updateSubscription(db, organizationId, { seatLimit: 1, monthlyOptimisationLimit: settings.defaultOptimisationLimit });
+  await ops.writeAudit(db, { organizationId, actorUserId: userId, action: "traveler.workspace_created", resourceType: "organization", resourceId: organizationId, metadata: { country: body.country, currency: body.defaultCurrency }, requestId: c.get("requestId") });
+  await startSession(c, userId, organizationId);
+  await sendVerificationEmail(c, { id: userId, email });
+  c.set("auth", { userId, email, displayName: body.displayName, platformAdmin: false, emailVerified: false, sessionId: "", organizationId, organizationType: "tour_operator", organizationName, accountKind: "individual", role: "staff", permissions: new Set(permissionsForRole("staff")), memberships: await identity.listUserMemberships(db, userId) });
   return ok(c, await describeSession(c), 201);
 });
 
@@ -164,7 +200,7 @@ authRoutes.post("/switch-organization", requireAuth, async (c) => {
   const m = a.memberships.find((x) => x.organizationId === organizationId && x.status === "active");
   if (!m) throw new AppError("forbidden", "You are not a member of that organisation");
   await identity.setSessionOrganization(c.get("db"), a.sessionId, organizationId);
-  c.set("auth", { ...a, organizationId, organizationType: m.organizationType ?? null, organizationName: m.organizationName ?? null, role: m.role, permissions: new Set(permissionsForRole(m.role)) });
+  c.set("auth", { ...a, organizationId, organizationType: m.organizationType ?? null, organizationName: m.organizationName ?? null, accountKind: m.organizationAccountKind ?? "business", role: m.role, permissions: new Set(permissionsForRole(m.role)) });
   await audit(c, "auth.switch_organization", "organization", organizationId);
   return ok(c, await describeSession(c));
 });

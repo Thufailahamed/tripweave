@@ -92,6 +92,20 @@ export class Harness {
     if (r.status !== 201) throw new Error(`register failed: ${r.status} ${r.text}`);
     return c;
   }
+
+  async registerTraveler(name: string, email?: string): Promise<Client> {
+    const c = this.client();
+    const r = await c.post("/auth/register-traveler", {
+      email: email ?? `${name.toLowerCase().replace(/\W+/g, "")}@example.com`,
+      password: PASSWORD,
+      displayName: `${name} Traveller`,
+      country: "LK",
+      defaultCurrency: "USD",
+      timezone: "Asia/Colombo",
+    });
+    if (r.status !== 201) throw new Error(`registerTraveler failed: ${r.status} ${r.text}`);
+    return c;
+  }
 }
 
 export interface HotelSpec {

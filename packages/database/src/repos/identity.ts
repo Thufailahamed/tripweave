@@ -1,4 +1,4 @@
-import type { OrganizationType, Role } from "@tripweave/shared";
+import type { AccountKind, OrganizationType, Role } from "@tripweave/shared";
 import { clock, batch, execute, newId, nowIso, parseJson, query, queryOne, stmt, toJson, str, strOrNull, num, type Db, type Row } from "../db";
 
 export interface OrganizationRow {
@@ -6,6 +6,7 @@ export interface OrganizationRow {
   name: string;
   slug: string;
   organizationType: OrganizationType;
+  accountKind: AccountKind;
   status: string;
   defaultCurrency: string;
   timezone: string;
@@ -21,6 +22,7 @@ export const mapOrg = (r: Row): OrganizationRow => ({
   name: str(r.name),
   slug: str(r.slug),
   organizationType: str(r.organization_type) as OrganizationType,
+  accountKind: (strOrNull(r.account_kind) as AccountKind | null) ?? "business",
   status: str(r.status),
   defaultCurrency: str(r.default_currency),
   timezone: str(r.timezone),
@@ -62,6 +64,7 @@ export interface MembershipRow {
   status: string;
   organizationName?: string;
   organizationType?: OrganizationType;
+  organizationAccountKind?: AccountKind;
   organizationStatus?: string;
   email?: string;
   displayName?: string;
@@ -105,6 +108,34 @@ export async function createOrganizationWithOwner(
   return { organizationId: orgId, userId };
 }
 
+/**
+ * Creates a personal workspace for an individual traveller. The organisation is still a tenant
+ * (so every existing constraint and repository works unchanged), but `staff` deliberately has no
+ * margin or contract visibility and `account_kind` keeps the operator UI away from it.
+ */
+export async function createTravelerWorkspace(
+  db: Db,
+  input: {
+    organizationName: string;
+    slug: string;
+    country: string;
+    currency: string;
+    timezone: string;
+    user: { email: string; displayName: string; passwordHash: string };
+  },
+): Promise<{ organizationId: string; userId: string }> {
+  const ts = nowIso();
+  const orgId = newId();
+  const userId = newId();
+  await batch(db, [
+    stmt(db, `INSERT INTO organizations (id,name,slug,organization_type,account_kind,status,default_currency,timezone,country,created_at,updated_at) VALUES (?,?,?,?, 'individual', 'active',?,?,?,?,?)`, [orgId, input.organizationName, input.slug, "tour_operator", input.currency, input.timezone, input.country, ts, ts]),
+    stmt(db, `INSERT INTO users (id,email,display_name,password_hash,status,created_at,updated_at) VALUES (?,?,?,?, 'active',?,?)`, [userId, input.user.email, input.user.displayName, input.user.passwordHash, ts, ts]),
+    stmt(db, `INSERT INTO organization_memberships (id,organization_id,user_id,role,status,created_at,updated_at) VALUES (?,?,?,'staff','active',?,?)`, [newId(), orgId, userId, ts, ts]),
+    stmt(db, `INSERT INTO subscriptions (id,organization_id,plan,status,seat_limit,created_at,updated_at) VALUES (?,?,'trial','active',1,?,?)`, [newId(), orgId, ts, ts]),
+  ]);
+  return { organizationId: orgId, userId };
+}
+
 export async function findUserByEmail(db: Db, email: string): Promise<UserRow | null> {
   const r = await queryOne(db, "SELECT * FROM users WHERE email = ?", [email]);
   return r ? mapUser(r) : null;
@@ -123,6 +154,10 @@ export async function createUser(db: Db, u: { email: string; displayName: string
 
 export async function setPassword(db: Db, userId: string, hash: string): Promise<void> {
   await execute(db, "UPDATE users SET password_hash = ?, failed_login_count = 0, locked_until = NULL, updated_at = ? WHERE id = ?", [hash, nowIso(), userId]);
+}
+
+export async function updateUserDisplayName(db: Db, userId: string, displayName: string): Promise<void> {
+  await execute(db, "UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?", [displayName, nowIso(), userId]);
 }
 
 export async function recordLoginFailure(db: Db, userId: string, maxFailures: number, lockMinutes: number): Promise<void> {
@@ -160,7 +195,7 @@ export async function updateOrganization(
 export async function listUserMemberships(db: Db, userId: string): Promise<MembershipRow[]> {
   const rows = await query(
     db,
-    `SELECT m.*, o.name AS organization_name, o.organization_type, o.status AS organization_status
+    `SELECT m.*, o.name AS organization_name, o.organization_type, o.account_kind AS organization_account_kind, o.status AS organization_status
        FROM organization_memberships m JOIN organizations o ON o.id = m.organization_id
       WHERE m.user_id = ? AND m.status = 'active' ORDER BY o.name`,
     [userId],
@@ -173,6 +208,7 @@ export async function listUserMemberships(db: Db, userId: string): Promise<Membe
     status: str(r.status),
     organizationName: str(r.organization_name),
     organizationType: str(r.organization_type) as OrganizationType,
+    organizationAccountKind: (strOrNull(r.organization_account_kind) as AccountKind | null) ?? "business",
     organizationStatus: str(r.organization_status),
   }));
 }
@@ -180,7 +216,7 @@ export async function listUserMemberships(db: Db, userId: string): Promise<Membe
 export async function getMembership(db: Db, organizationId: string, userId: string): Promise<MembershipRow | null> {
   const r = await queryOne(
     db,
-    `SELECT m.*, o.name AS organization_name, o.organization_type, o.status AS organization_status
+    `SELECT m.*, o.name AS organization_name, o.organization_type, o.account_kind AS organization_account_kind, o.status AS organization_status
        FROM organization_memberships m JOIN organizations o ON o.id = m.organization_id
       WHERE m.organization_id = ? AND m.user_id = ?`,
     [organizationId, userId],
@@ -194,6 +230,7 @@ export async function getMembership(db: Db, organizationId: string, userId: stri
     status: str(r.status),
     organizationName: str(r.organization_name),
     organizationType: str(r.organization_type) as OrganizationType,
+    organizationAccountKind: (strOrNull(r.organization_account_kind) as AccountKind | null) ?? "business",
     organizationStatus: str(r.organization_status),
   };
 }

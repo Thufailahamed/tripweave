@@ -4,3 +4,4 @@ export * from "./errors";
 export * from "./permissions";
 export * from "./types";
 export * from "./schemas";
+export * from "./traveler";

@@ -32,6 +32,7 @@ export const authenticate: MiddlewareHandler<Bindings> = async (c, next) => {
           organizationId: chosen?.organizationId ?? null,
           organizationType: chosen?.organizationType ?? null,
           organizationName: chosen?.organizationName ?? null,
+          accountKind: chosen?.organizationAccountKind ?? null,
           role: chosen?.role ?? null,
           permissions: new Set(chosen ? permissionsForRole(chosen.role) : []),
           memberships,
@@ -62,12 +63,19 @@ export function getAuth(c: AppContext): AuthContext {
 }
 
 /** Authenticated AND acting inside an active organisation. Returns the verified context. */
-export function getTenant(c: AppContext): AuthContext & { organizationId: string; role: NonNullable<AuthContext["role"]> } {
+export function getTenant(c: AppContext): AuthContext & { organizationId: string; accountKind: NonNullable<AuthContext["accountKind"]>; role: NonNullable<AuthContext["role"]> } {
   const a = getAuth(c);
   if (!a.organizationId || !a.role) throw new AppError("forbidden", "No active organisation for this account");
   const m = a.memberships.find((x) => x.organizationId === a.organizationId);
   if (m?.organizationStatus === "suspended") throw new AppError("forbidden", "This organisation is suspended");
-  return a as AuthContext & { organizationId: string; role: NonNullable<AuthContext["role"]> };
+  return a as AuthContext & { organizationId: string; accountKind: NonNullable<AuthContext["accountKind"]>; role: NonNullable<AuthContext["role"]> };
+}
+
+/** Authenticated inside a personal workspace. Business workspaces are rejected even when they hold every permission. */
+export function getTraveler(c: AppContext): AuthContext & { organizationId: string; accountKind: "individual"; role: NonNullable<AuthContext["role"]> } {
+  const t = getTenant(c);
+  if (t.accountKind !== "individual") throw new AppError("forbidden", "This area is for personal trip planning");
+  return t as AuthContext & { organizationId: string; accountKind: "individual"; role: NonNullable<AuthContext["role"]> };
 }
 
 export const requireAuth: MiddlewareHandler<Bindings> = async (c, next) => {
@@ -76,6 +84,10 @@ export const requireAuth: MiddlewareHandler<Bindings> = async (c, next) => {
 };
 export const requireTenant: MiddlewareHandler<Bindings> = async (c, next) => {
   getTenant(c);
+  await next();
+};
+export const requireTraveler: MiddlewareHandler<Bindings> = async (c, next) => {
+  getTraveler(c);
   await next();
 };
 export function requirePermission(...perms: Permission[]): MiddlewareHandler<Bindings> {
