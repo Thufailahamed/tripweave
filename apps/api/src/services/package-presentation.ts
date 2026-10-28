@@ -1,3 +1,4 @@
+import type { PlanningHotelOffer, PlanningPackageView } from "@tripweave/planning-contract";
 import { inventory, type trips } from "@tripweave/database";
 import type { AppContext } from "../lib/http";
 import { getTenant } from "../middleware/auth";
@@ -39,4 +40,32 @@ export async function presentPackageList(c: AppContext, records: trips.PackageRe
       };
     }),
   );
+}
+
+/**
+ * Presents stored packages with short refs (`pkg_1`, `offer_1`) for generated UI. Each hotel offer is
+ * listed once, however many packages use it, so a reference always maps to one authoritative offer.
+ */
+export async function presentReferencedPackages(c: AppContext, records: trips.PackageRecord[]): Promise<{ packages: PlanningPackageView[]; offers: PlanningHotelOffer[] }> {
+  const packages = ((await presentPackageList(c, records)) as unknown as PlanningPackageView[]).map((pkg, index) => ({ ...pkg, ref: `pkg_${index + 1}` }));
+  const offersById = new Map<string, PlanningHotelOffer>();
+  for (const pkg of packages) {
+    for (const selection of pkg.package.selections) {
+      const existing = offersById.get(selection.offer.offerId);
+      if (existing) {
+        if (!existing.packageIds.includes(pkg.id)) existing.packageIds.push(pkg.id);
+      } else {
+        offersById.set(selection.offer.offerId, {
+          ref: `offer_${offersById.size + 1}`,
+          offerId: selection.offer.offerId,
+          packageIds: [pkg.id],
+          stopId: selection.stopId,
+          destination: selection.destination,
+          offer: selection.offer,
+          coverImageId: selection.coverImageId ?? null,
+        });
+      }
+    }
+  }
+  return { packages, offers: [...offersById.values()].slice(0, 40) };
 }

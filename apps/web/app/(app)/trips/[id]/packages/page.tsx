@@ -23,6 +23,7 @@ import { IMAGES, Photo } from "@/features/marketing/imagery";
 import { useCan } from "@/lib/session";
 import { cn, formatDate, formatDateTime, money, nightsLabel, titleCase } from "@/lib/utils";
 import { PackageCard } from "@/features/trips/package-card";
+import { PackageStoryPanel } from "@/features/package-showcase/panel";
 import { InfeasibilityPanel, ProviderOutcomes } from "@/features/trips/job-results";
 import { useJobs, usePackages, useTrip } from "@/features/trips/hooks";
 import type { PackageView } from "@/features/trips/types";
@@ -282,9 +283,9 @@ export default function PackagesPage() {
   if (q.isLoading) return <div className="tw-page-in flex flex-col gap-6">{hero}<LoadingBlock label="Loading packages" /></div>;
   if (q.isError) return <div className="tw-page-in flex flex-col gap-6">{hero}<ErrorState error={q.error} onRetry={() => q.refetch()} title="Could not load packages" /></div>;
 
-  const openPackage = (p: PackageView) => {
+  const focusPackage = (packageId: string) => {
     setView("cards");
-    window.setTimeout(() => document.getElementById(`pkgcard-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    window.setTimeout(() => document.getElementById(`pkgcard-${packageId}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
 
   return (
@@ -295,6 +296,8 @@ export default function PackagesPage() {
         <EmptyState icon={Layers} title="No packages yet" description="Confirm the itinerary, then run an optimisation to generate hotel packages." image={IMAGES.hotels} action={<div className="flex gap-2"><Button asChild variant="outline"><Link href={`${base}/itinerary`}>Review itinerary</Link></Button>{can("optimisation:run") ? <Button asChild><Link href={`${base}/optimise`}><Sparkles /> Optimise</Link></Button> : null}</div>} />
       ) : (
         <>
+          {job.status === "succeeded" && packages.length > 0 ? <PackageStoryPanel tripId={id} jobId={job.id} onFocusPackage={focusPackage} /> : null}
+
           <div className="sticky top-16 z-20 -mx-1 flex flex-wrap items-center gap-2 rounded-2xl border border-border/70 bg-card/85 p-2.5 shadow-[0_12px_40px_-24px_rgba(20,26,45,0.3)] backdrop-blur-xl">
             <ViewToggle view={view} onChange={setView} />
             <div className="flex flex-wrap gap-1.5">
@@ -335,7 +338,7 @@ export default function PackagesPage() {
               {visible.length === 0 ? (
                 <EmptyState icon={Layers} title="No packages match this filter" description="Try another filter or show all packages." action={<Button variant="outline" onClick={() => setFilter("all")}>Show all packages</Button>} />
               ) : view === "table" ? (
-                <ComparisonTable packages={visible} onOpen={openPackage} />
+                <ComparisonTable packages={visible} onOpen={(p) => focusPackage(p.id)} />
               ) : (
                 <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
                   {visible.map((p) => {

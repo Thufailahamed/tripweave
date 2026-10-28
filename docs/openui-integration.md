@@ -230,3 +230,38 @@ Do not add an `actions:` array to either `createLibrary` call. The host-handled 
   2. `API_BASE_URL=http://localhost:8787 pnpm --filter @tripweave/web dev` (web on port 3000)
   3. `node scripts/planner-e2e.mjs <screenshot-dir>` drives Chromium through the trip page and checks every block, the photographs, the map markers and tiles, each interaction, the repair and fallback paths, the off-topic reply, dark mode and a 390px layout.
 - The scripted model proves the rendering and the protocol. It does not prove that Workers AI writes good programs; that still needs a check against the live model on staging.
+
+## Package presentation (trip packages page)
+
+The packages page composes an OpenUI story from one optimisation run, above the standard card list. The data path is the same as the planner's: the optimiser's provider search (Google Hotels via SerpApi) stores offers and packages, the server builds a snapshot from them, and the model composes the layout from refs. The model is never asked for a price, hotel, date, rating or live status.
+
+| Path | Responsibility |
+|---|---|
+| `packages/planning-contract/src/package-library.ts` | Finite library: `PackageShowcase`, `Lead`, `Note`, `PackageCard`, `PackageCompare`, `HotelStay`, `PriceBreakdown`, `BudgetFit`, `LivePriceStatus`, `PackageInsight`, `NextSteps`. Shared by server and browser. |
+| `packages/planning-contract/src/package-showcase.ts` | Snapshot type and the host action list (`focus_package`, `validate_package`, `create_quote`, `open_itinerary`, `open_optimise`). |
+| `packages/ai/src/package-showcase.ts` | Prompt, reader-focus context, streaming wrapper. Prices appear in CONTEXT so the model can rank packages, but the prompt forbids writing them. |
+| `apps/api/src/services/package-showcase.ts` | Snapshot for one run, the validator and the deterministic fallback. |
+| `apps/api/src/services/program-validation.ts` | Node collection, plain-text rules and string literals shared with the planner validator. |
+| `apps/api/src/routes/package-showcase.ts` | `GET` (snapshot only, no generation) and `POST` (streamed presentation). |
+| `apps/web/features/package-showcase` | Renderer library, components, `PackageStoryPanel`, stream client and the pure helpers that derive live state, per-night and per-traveller figures and budget position. |
+
+### Turn flow
+
+- The panel fetches the snapshot and streams a presentation with `POST /trips/:id/packages/presentation` (`jobId`, optional `focus`, at most 300 characters). The stream sends `meta` (snapshot), `delta`, `reset` and `done`, as the planner does.
+- A presentation must show at least one package with `PackageCard` or `PackageCompare`. Every `packageId`, `offerId` and membership is checked against the snapshot, and `HotelStay` with a package must belong to that package.
+- Model-written text may not state prices, currency amounts, percentages, ratings or links. The shared free-text rule covers the planner too.
+- One repair attempt follows a failed validation. A second failure, a timeout or no configured engine shows the deterministic presentation, which is built only from refs and validates in tests.
+
+### Correctness rules in the browser
+
+- Selling price, tax and total payable come from `pricing`. Per-night and per-traveller figures are arithmetic on those values; the traveller count is adults plus children.
+- Budget position uses the server's `budgetDifferenceMinor`. A meter appears only when the package currency matches the trip budget.
+- "Live checked" needs `allVerified` and a `validUntil` in the future. An expired check shows as expired. External rates block **Create quotation** until they are live checked, which matches the packages page and the quotation API.
+- Margin lines appear only when the server includes them (`margins:view`). Contract references are never sent to readers without `agreements:manage`.
+- After **Re-check live prices**, the panel refreshes the snapshot with `GET` and keeps the generated layout, so no model call is needed to show new values.
+
+### Operational notes
+
+- Each page visit that has packages composes a new story (one model call). The turn is rate limited to 30 per user per hour. Nothing is cached server-side; the reader can compose again with a focus.
+- A reader focus is stored only in the request and the prompt, never in the database or audit log.
+- The e2e check is `node scripts/package-showcase-e2e.mjs <screenshot-dir>`. It seeds hotels, a trip and an optimisation run through the API, then checks the rendered prices against the API's packages, the mobile layout and the console. Start the e2e API server (`apps/api/test/e2e/serve.ts`) and the web dev server first; the scripted model composes a presentation from the refs in CONTEXT.

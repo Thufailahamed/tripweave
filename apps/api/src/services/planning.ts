@@ -16,9 +16,10 @@ import { quotes, trips } from "@tripweave/database";
 import { buildStops, validateItinerary } from "@tripweave/itinerary-engine";
 import type { AppContext } from "../lib/http";
 import { audit, getTenant } from "../middleware/auth";
-import { presentPackageList } from "./package-presentation";
+import { presentReferencedPackages } from "./package-presentation";
 import { allocateRooms } from "./party";
 import { computeStopLegs } from "./routing";
+import { collectNodes, freeTextProblem, lang, langArray, withoutNulls, TOLERATED_PARSE_ERRORS } from "./program-validation";
 
 const COMPONENT_SET = new Set<string>(PLANNING_COMPONENT_NAMES);
 
@@ -131,26 +132,7 @@ export async function buildPlanningSnapshot(ctx: AppContext, tripId: string): Pr
   const [itinerary, jobs] = await Promise.all([trips.getLatestItinerary(db, a.organizationId, tripId), trips.listJobsForTrip(db, a.organizationId, tripId)]);
   const job = jobs.find((row) => row.status === "succeeded" || row.status === "infeasible") ?? null;
   const records = job?.status === "succeeded" ? await trips.listJobPackages(db, a.organizationId, job.id) : [];
-  const presented = ((await presentPackageList(ctx, records.slice(0, 20))) as unknown as PlanningPackageView[]).map((pkg, index) => ({ ...pkg, ref: `pkg_${index + 1}` }));
-  const offersById = new Map<string, PlanningHotelOffer>();
-  for (const pkg of presented) {
-    for (const selection of pkg.package.selections) {
-      const existing = offersById.get(selection.offer.offerId);
-      if (existing) {
-        if (!existing.packageIds.includes(pkg.id)) existing.packageIds.push(pkg.id);
-      } else {
-        offersById.set(selection.offer.offerId, {
-          ref: `offer_${offersById.size + 1}`,
-          offerId: selection.offer.offerId,
-          packageIds: [pkg.id],
-          stopId: selection.stopId,
-          destination: selection.destination,
-          offer: selection.offer,
-          coverImageId: selection.coverImageId ?? null,
-        });
-      }
-    }
-  }
+  const { packages: presented, offers } = await presentReferencedPackages(ctx, records.slice(0, 20));
   const quotesPage = a.permissions.has("quotes:read") ? await quotes.listQuotes(db, a.organizationId, { tripId, page: 1, pageSize: 20 }) : null;
   const questions = buildPlanningQuestions(trip, itinerary);
   const parse = asStoredParse(trip.parseResult);
@@ -206,7 +188,7 @@ export async function buildPlanningSnapshot(ctx: AppContext, tripId: string): Pr
     },
     itinerary: itineraryView,
     packages: presented,
-    offers: [...offersById.values()].slice(0, 40),
+    offers,
     quotes: quoteSummaries,
     questions,
     missingFields: questions.map((question) => question.label),
@@ -223,41 +205,7 @@ export async function buildPlanningSnapshot(ctx: AppContext, tripId: string): Pr
   };
 }
 
-/** Photo boards nest their cards, so a rich reply can hold a few dozen nodes; this caps absurd ones. */
-const MAX_NODES = 60;
-
-/** Extracts every ElementNode reachable from the root, with a hard cap against absurd programs. */
-function collectNodes(root: unknown): { nodes: { typeName: string; props: Record<string, unknown> }[]; tooMany: boolean } {
-  const nodes: { typeName: string; props: Record<string, unknown> }[] = [];
-  const visitValue = (value: unknown): void => {
-    if (nodes.length > MAX_NODES) return;
-    if (Array.isArray(value)) {
-      for (const item of value) visitValue(item);
-      return;
-    }
-    if (value && typeof value === "object" && (value as { type?: unknown }).type === "element") {
-      const node = value as { typeName: string; props: Record<string, unknown> };
-      nodes.push({ typeName: node.typeName, props: node.props });
-      for (const child of Object.values(node.props ?? {})) visitValue(child);
-    }
-  };
-  visitValue(root);
-  return { nodes, tooMany: nodes.length > MAX_NODES };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-const PRICE_OR_URL = /(?:\b(?:USD|EUR|GBP|LKR)\b\s?\d|[$€£]\s?\d|\d[\d,.]*\s?\b(?:USD|EUR|GBP|LKR|dollars?|euros?|pounds?|rupees?)\b|https?:\/\/|www\.)/i;
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
-
-/**
- * The parser drops extra positional arguments before anything renders, so a reply that passes one too
- * many (a subtitle a block does not take, say) is still safe and complete. Rejecting it would throw away
- * a good page over a harmless slip.
- */
-export const TOLERATED_PARSE_ERRORS: ReadonlySet<string> = new Set(["excess-args"]);
+export { TOLERATED_PARSE_ERRORS } from "./program-validation";
 
 /** Container blocks whose list may hold only one child component, keyed by the list prop. */
 const NESTED_CHILDREN = {
@@ -265,31 +213,6 @@ const NESTED_CHILDREN = {
   Choices: ["options", "Choice"],
   DayBoard: ["days", "BoardDay"],
 } as const;
-
-/**
- * Every string the model writes, at any depth, is plain text. Length and bounds are checked by the
- * component's Zod schema; this rejects control characters and anything that looks like a price or link.
- */
-function freeTextProblem(value: unknown): string | null {
-  if (typeof value === "string") {
-    if (value.length > 1_000) return "is too long";
-    if (CONTROL_CHARACTERS.test(value)) return "contains control characters";
-    if (PRICE_OR_URL.test(value)) return "must not contain prices or URLs";
-    return null;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const problem = freeTextProblem(item);
-      if (problem) return problem;
-    }
-  }
-  return null;
-}
-
-/** The parser represents omitted optional arguments as null; the Zod schemas expect them to be absent. */
-function withoutNulls(props: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(props).filter(([, value]) => value !== null && value !== undefined));
-}
 
 /**
  * Validates a complete program against the allowlist and the snapshot. The parser enforces prop types
@@ -442,10 +365,6 @@ export function validatePlanningProgram(
   return errors.length > 0 ? { ok: false, errors } : { ok: true };
 }
 
-function lang(value: string): string {
-  return JSON.stringify(value);
-}
-
 /** Deterministic, readable fallback built only from authoritative IDs. */
 export function buildFallbackProgram(snapshot: PlanningSnapshot, reason: "unavailable" | "invalid" | "standard" = "standard"): string {
   const defs: string[] = [];
@@ -480,10 +399,6 @@ export function buildFallbackProgram(snapshot: PlanningSnapshot, reason: "unavai
         ? "The generated view could not be validated. This standard summary uses the latest server data."
         : "A standard summary of the latest server data.";
   return [`root = PlanningCanvas(${lang("Trip planning overview")}, [${blocks.join(", ")}], ${lang(subtitle)})`, ...defs].join("\n");
-}
-
-function langArray(values: string[]): string {
-  return `[${values.map((value) => lang(value)).join(", ")}]`;
 }
 
 function parseChildAges(value: unknown): number[] {
