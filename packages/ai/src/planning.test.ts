@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PlanningSnapshot } from "@tripweave/planning-contract";
 import { ExternalLlmClient, WorkersAiClient, sseData } from "./clients";
 import type { LlmClient } from "./parse";
-import { buildPlanningContext, buildPlanningPrompt, planningStarters, streamPlanningProgram } from "./planning";
+import { PLANNING_TEMPERATURE, buildPlanningContext, buildPlanningPrompt, planningStarters, streamPlanningProgram } from "./planning";
 
 const snapshot: PlanningSnapshot = {
   generatedAt: "2026-10-28T10:00:00.000Z",
@@ -76,6 +76,38 @@ describe("planning prompt", () => {
   it("offers starters that match the available data", () => {
     expect(planningStarters(snapshot).map((s) => s.label)).toContain("What is still missing?");
     expect(planningStarters(snapshot).map((s) => s.label)).not.toContain("Compare the packages");
+  });
+});
+
+describe("general travel planning", () => {
+  it("offers the travel-guide blocks and adds a repair note only when a reply needs repairing", () => {
+    const first = buildPlanningPrompt(snapshot, { message: "Where should we go in Sri Lanka in December?" });
+    expect(first.system).toContain("PlaceGallery");
+    expect(first.system).toContain("FollowUps");
+    expect(first.user).not.toContain("repairNote");
+    const repaired = buildPlanningPrompt(snapshot, { message: "Where?", repair: { previousReply: 'root = Evil("x")', problems: ["unknown component: Evil"] } });
+    expect(JSON.parse(repaired.user).repairNote).toEqual({ previousReply: 'root = Evil("x")', problems: ["unknown component: Evil"] });
+  });
+
+  it("samples planning replies at the composition temperature rather than repeating one program", async () => {
+    const temperatures: unknown[] = [];
+    const client: LlmClient = {
+      engine: "external_llm",
+      model: "fake",
+      extract: async () => ({}),
+      async *stream(args) {
+        temperatures.push(args.temperature);
+        yield "root = PlanningCanvas";
+      },
+    };
+    await streamPlanningProgram(client, snapshot, { message: "Pack for the hills" }, () => undefined, new AbortController().signal);
+    expect(temperatures).toEqual([PLANNING_TEMPERATURE]);
+    expect(PLANNING_TEMPERATURE).toBeGreaterThan(0);
+  });
+
+  it("keeps general starters available when the saved trip has no itinerary or packages", () => {
+    expect(planningStarters(snapshot).map((starter) => starter.label)).toEqual(expect.arrayContaining(["Things to see and do", "What should we pack?"]));
+    expect(planningStarters(snapshot).length).toBeLessThanOrEqual(6);
   });
 });
 

@@ -116,6 +116,7 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
             patchTurn(assistantId, { snapshot: meta.snapshot });
           },
           onDelta: (chunk) => setMessages((current) => current.map((message) => (message.id === assistantId ? { ...message, content: message.content + chunk } : message))),
+          onReset: () => patchTurn(assistantId, { content: "", warnings: [], errors: [] }),
           onDone: (done) => {
             doneReceived = true;
             patchTurn(assistantId, { content: done.program, status: "done", usedFallback: done.usedFallback, reason: done.reason, warnings: done.warnings ?? [] });
@@ -223,7 +224,7 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
   if (initial.isLoading && !snapshot) return <LoadingBlock label="Loading planning context" />;
   if (initial.isError && !snapshot) return <ErrorState error={initial.error} onRetry={() => initial.refetch()} title="Could not load the planning assistant" />;
 
-  const visibleStarters = (starters.length > 0 ? starters : [{ label: "Summarise the trip", prompt: "Summarise the current trip requirements." }]).slice(0, 4);
+  const visibleStarters = (starters.length > 0 ? starters : [{ label: "Summarise the trip", prompt: "Summarise the current trip requirements." }]).slice(0, 6);
 
   return (
     <div className="flex flex-col gap-3">
@@ -277,7 +278,7 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
                     <div role="status" className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-4">
                       <span aria-hidden className="size-2 animate-pulse rounded-full bg-accent" />
                       <span className="pl-hand" style={{ fontFamily: "var(--font-caveat), cursive", color: "var(--accent)", fontSize: "1.3rem" }}>
-                        composing your itinerary…
+                        composing your answer…
                       </span>
                     </div>
                   ) : null}
@@ -357,7 +358,7 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
               maxLength={4_000}
               rows={2}
               disabled={streaming || !snapshot}
-              placeholder={snapshot ? "Ask about hotels, routes, packages or what is missing…" : "Planning context is loading…"}
+              placeholder={snapshot ? "Ask about this trip, or anything about travel: places, seasons, routes, packing…" : "Planning context is loading…"}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -387,11 +388,11 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
             </div>
           </form>
           <p className="flex items-center gap-1.5 px-1 text-[10px] text-muted-foreground">
-            <MessageSquare className="size-3" aria-hidden /> Generated interfaces are validated against a fixed component allowlist. AI is optional; the standard view uses the same data.
+            <MessageSquare className="size-3" aria-hidden /> Each reply is composed for your question from a fixed set of blocks and checked before it appears. Trip prices and availability always come from the saved trip.
           </p>
       </div>
       {!engineAvailable ? (
-        <p className="text-xs text-muted-foreground">AI generation is not configured for this organisation. Requests still work and return a deterministic, readable summary built from the same server data.</p>
+        <p className="text-xs text-muted-foreground">AI generation is not configured for this organisation. Requests still work and return a readable summary built from the saved trip; general travel questions need AI.</p>
       ) : null}
     </div>
   );

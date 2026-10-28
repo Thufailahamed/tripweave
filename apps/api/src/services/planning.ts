@@ -1,8 +1,10 @@
 import { createParser } from "@openuidev/lang-core";
 import {
   PLANNING_COMPONENT_NAMES,
+  PLANNING_PROP_SCHEMAS,
   getPlanningJSONSchema,
   type ClarificationSubmission,
+  type PlanningComponentName,
   type PlanningHotelOffer,
   type PlanningItineraryView,
   type PlanningPackageView,
@@ -244,10 +246,39 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+const PRICE_OR_URL = /(?:\b(?:USD|EUR|GBP|LKR)\b\s?\d|[$€£]\s?\d|\d[\d,.]*\s?\b(?:USD|EUR|GBP|LKR|dollars?|euros?|pounds?|rupees?)\b|https?:\/\/|www\.)/i;
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+
 /**
- * Validates a complete program against the allowlist and the snapshot. The parser enforces prop
- * types/lengths; this pass additionally rejects cross-tenant IDs, unresolved references, tools and
- * non-allowlisted components before any generated UI is rendered.
+ * Every string the model writes, at any depth, is plain text. Length and bounds are checked by the
+ * component's Zod schema; this rejects control characters and anything that looks like a price or link.
+ */
+function freeTextProblem(value: unknown): string | null {
+  if (typeof value === "string") {
+    if (value.length > 1_000) return "is too long";
+    if (CONTROL_CHARACTERS.test(value)) return "contains control characters";
+    if (PRICE_OR_URL.test(value)) return "must not contain prices or URLs";
+    return null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const problem = freeTextProblem(item);
+      if (problem) return problem;
+    }
+  }
+  return null;
+}
+
+/** The parser represents omitted optional arguments as null; the Zod schemas expect them to be absent. */
+function withoutNulls(props: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(props).filter(([, value]) => value !== null && value !== undefined));
+}
+
+/**
+ * Validates a complete program against the allowlist and the snapshot. The parser enforces prop types
+ * and required arguments; each node is then checked against its component schema (lengths, bounds,
+ * enums), every string is checked as plain text, and every reference must resolve to the current
+ * snapshot. Tools and non-allowlisted components are rejected before any generated UI is rendered.
  */
 export function validatePlanningProgram(program: string, snapshot: PlanningSnapshot): { ok: true } | { ok: false; errors: string[] } {
   if (typeof program !== "string" || program.trim().length === 0) return { ok: false, errors: ["empty program"] };
@@ -280,27 +311,20 @@ export function validatePlanningProgram(program: string, snapshot: PlanningSnaps
       errors.push(`unknown component: ${node.typeName}`);
       continue;
     }
-    const props = node.props ?? {};
-    const text = (key: string, max: number): string | null => {
-      const value = props[key];
-      if (value === undefined) return null;
-      if (typeof value !== "string" || value.length === 0 || value.length > max) {
-        errors.push(`${node.typeName}.${key} must be text up to ${max} characters`);
-        return null;
-      }
-      if (/[\u0000-\u001f\u007f]/.test(value)) {
-        errors.push(`${node.typeName}.${key} contains control characters`);
-        return null;
-      }
-      if (/(?:\b(?:USD|EUR|GBP|LKR)\b\s?\d|[$€£]\s?\d|\d[\d,.]*\s?\b(?:USD|EUR|GBP|LKR)\b|https?:\/\/|www\.)/i.test(value)) {
-        errors.push(`${node.typeName}.${key} must not contain prices or URLs`);
-        return null;
-      }
-      return value;
-    };
+    const props = withoutNulls(node.props ?? {});
+    const schema = PLANNING_PROP_SCHEMAS[node.typeName as PlanningComponentName];
+    const parsed = schema.safeParse(props);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues.slice(0, 3)) errors.push(`${node.typeName}${issue.path.length > 0 ? `.${issue.path.join(".")}` : ""} ${issue.message}`);
+      continue;
+    }
+    for (const [key, value] of Object.entries(props)) {
+      const problem = freeTextProblem(value);
+      if (problem) errors.push(`${node.typeName}.${key} ${problem}`);
+    }
     const id = (key: string, required: boolean): string | null => {
       const value = props[key];
-      if (value === undefined || value === null) {
+      if (value === undefined) {
         if (required) errors.push(`${node.typeName}.${key} is required`);
         return null;
       }
@@ -310,32 +334,28 @@ export function validatePlanningProgram(program: string, snapshot: PlanningSnaps
       }
       return value;
     };
-    const idArray = (key: string, max: number): string[] => {
-      const value = props[key];
-      if (!Array.isArray(value) || value.length === 0 || value.length > max || value.some((item) => typeof item !== "string")) {
-        errors.push(`${node.typeName}.${key} must be an array of 1-${max} IDs`);
-        return [];
-      }
-      return value as string[];
-    };
+    const idArray = (key: string): string[] => (Array.isArray(props[key]) ? (props[key] as string[]) : []);
     switch (node.typeName) {
       case "PlanningCanvas":
-        text("title", 80);
-        text("subtitle", 300);
         if (!Array.isArray(props.blocks) || props.blocks.length === 0) errors.push("PlanningCanvas.blocks must not be empty");
         break;
+      case "TripHero": {
+        const tripId = id("tripId", true);
+        if (tripId && !tripRefs.has(tripId)) errors.push("TripHero references another trip");
+        const itineraryKey = id("itineraryId", false);
+        if (itineraryKey && (!hasItinerary || !itineraryRefs.has(itineraryKey))) errors.push("TripHero references another itinerary");
+        break;
+      }
       case "TripRequirementSummary": {
         const tripId = id("tripId", true);
         if (tripId && !tripRefs.has(tripId)) errors.push("TripRequirementSummary references another trip");
         break;
       }
-      case "ClarificationForm":
-        text("prompt", 200);
-        break;
-      case "DestinationTimeline": {
+      case "DestinationTimeline":
+      case "TripMap": {
         const value = id("itineraryId", true);
-        if (!hasItinerary) errors.push("DestinationTimeline requires an itinerary");
-        else if (value && !itineraryRefs.has(value)) errors.push("DestinationTimeline references another itinerary");
+        if (!hasItinerary) errors.push(`${node.typeName} requires an itinerary`);
+        else if (value && !itineraryRefs.has(value)) errors.push(`${node.typeName} references another itinerary`);
         break;
       }
       case "HotelCard": {
@@ -349,20 +369,25 @@ export function validatePlanningProgram(program: string, snapshot: PlanningSnaps
         break;
       }
       case "HotelComparison": {
-        const offerIdList = idArray("offerIds", 10);
-        for (const offerKey of offerIdList) if (!offerByRef.has(offerKey)) errors.push("HotelComparison references an unknown offer");
+        for (const offerKey of idArray("offerIds")) if (!offerByRef.has(offerKey)) errors.push("HotelComparison references an unknown offer");
         break;
       }
       case "PackageSummary":
       case "CostBreakdown":
-      case "RecommendationExplanation": {
+      case "RecommendationExplanation":
+      case "BudgetMeter": {
         const packageKey = id("packageId", true);
         if (packageKey && !packageByRef.has(packageKey)) errors.push(`${node.typeName} references an unknown package`);
         break;
       }
       case "PackageComparison": {
-        const packageIdList = idArray("packageIds", 6);
-        for (const packageKey of packageIdList) if (!packageByRef.has(packageKey)) errors.push("PackageComparison references an unknown package");
+        for (const packageKey of idArray("packageIds")) if (!packageByRef.has(packageKey)) errors.push("PackageComparison references an unknown package");
+        break;
+      }
+      case "ComparisonTable": {
+        const columns = Array.isArray(props.columns) ? props.columns.length : 0;
+        const rows = Array.isArray(props.rows) ? (props.rows as unknown[][]) : [];
+        if (rows.some((row) => !Array.isArray(row) || row.length !== columns + 1)) errors.push("ComparisonTable rows must have one label and one cell per column");
         break;
       }
       case "RouteSummary": {
@@ -373,20 +398,10 @@ export function validatePlanningProgram(program: string, snapshot: PlanningSnaps
         if (!itineraryKey && !packageKey && !hasItinerary) errors.push("RouteSummary has no route to show");
         break;
       }
-      case "QuoteSummary": {
-        // Reserved for a future allowlist entry; a model must never invent one.
-        errors.push("unknown component: QuoteSummary");
-        break;
-      }
       default:
         break;
     }
-    for (const [key, value] of Object.entries(props)) {
-      if (value === null) continue;
-      if (typeof value === "string" && (value.length > 1000 || /[\u0000-\u001f\u007f]/.test(value))) errors.push(`${node.typeName}.${key} is unsafe`);
-    }
   }
-  // Quotes are only navigable when they exist in the snapshot; the action is host-handled.
   return errors.length > 0 ? { ok: false, errors } : { ok: true };
 }
 

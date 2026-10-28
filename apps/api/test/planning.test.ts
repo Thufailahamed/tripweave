@@ -43,6 +43,19 @@ function streamClient(program: () => string): LlmClient {
   };
 }
 
+/** Each generation pops the next scripted reply and records the prompt it was given. */
+function queuedClient(replies: string[], prompts: string[]): LlmClient {
+  return {
+    engine: "external_llm",
+    model: "fake-planning-model",
+    extract: async () => ({}),
+    async *stream(args) {
+      prompts.push(args.user);
+      yield replies.shift() ?? "";
+    },
+  };
+}
+
 async function createTrip(c: Awaited<ReturnType<Harness["register"]>>, extra: Record<string, unknown> = {}) {
   return c.ok<any>("POST", "/trips", {
     title: "Planning test trip",
@@ -109,6 +122,39 @@ describe("planning API", () => {
     expect(done?.data.usedFallback).toBe(true);
     expect(done.data.reason).toBe("invalid");
     expect(done.data.warnings[0]).toMatch(/validation/i);
+    expect(validatePlanningProgram(done.data.program, meta.data.snapshot as PlanningSnapshot)).toEqual({ ok: true });
+  });
+
+  it("repairs an invalid reply once: the draft is reset and the corrected program streams in its place", async () => {
+    const replies: string[] = [];
+    const prompts: string[] = [];
+    const h = new Harness({ buildLlm: () => queuedClient(replies, prompts) });
+    const owner = await h.register("Planning Repair", "tour_operator");
+    const trip = await createTrip(owner, { arrivalDate: "2026-12-10", departureDate: "2026-12-14" });
+    const corrected = `root = PlanningCanvas("Trip requirements", [summary], "Values come from the server.")\nsummary = TripRequirementSummary(${JSON.stringify(trip.id)})`;
+    replies.push(`root = PlanningCanvas("Bad", [evil])\nevil = Evil("x")`, corrected);
+    const res = await owner.post(`/trips/${trip.id}/planning`, { message: "What do we know?" });
+    const events = parseSse(res.text);
+    expect(events.map((event) => event.event)).toEqual(["meta", "delta", "reset", "delta", "done"]);
+    const done = mustEvent(events, "done");
+    expect(done.data).toMatchObject({ usedFallback: false, attempts: 2, program: corrected });
+    expect(prompts[0]).not.toContain("repairNote");
+    expect(JSON.parse(prompts[1]!).repairNote.problems[0]).toMatch(/Evil|unknown/i);
+  });
+
+  it("falls back to the standard view after a second invalid reply", async () => {
+    const replies: string[] = [];
+    const prompts: string[] = [];
+    const h = new Harness({ buildLlm: () => queuedClient(replies, prompts) });
+    const owner = await h.register("Planning Repair Twice", "tour_operator");
+    const trip = await createTrip(owner, { arrivalDate: "2026-12-10", departureDate: "2026-12-14" });
+    replies.push(`root = PlanningCanvas("Bad", [evil])\nevil = Evil("x")`, `root = PlanningCanvas("Bad", [evil])\nevil = Evil("y")`);
+    const res = await owner.post(`/trips/${trip.id}/planning`, { message: "Show me everything." });
+    const events = parseSse(res.text);
+    expect(events.map((event) => event.event)).toEqual(["meta", "delta", "reset", "delta", "done"]);
+    const meta = mustEvent(events, "meta");
+    const done = mustEvent(events, "done");
+    expect(done.data).toMatchObject({ usedFallback: true, reason: "invalid", attempts: 2 });
     expect(validatePlanningProgram(done.data.program, meta.data.snapshot as PlanningSnapshot)).toEqual({ ok: true });
   });
 

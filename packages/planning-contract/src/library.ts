@@ -22,15 +22,30 @@ export const PLANNING_COMPONENT_NAMES = [
   "RouteSummary",
   "RecommendationExplanation",
   "QuickActions",
+  "Lead",
+  "PlaceCard",
+  "PlaceGallery",
+  "DayPlan",
+  "TipList",
+  "KeyFacts",
+  "Callout",
+  "ComparisonTable",
+  "FollowUps",
 ] as const;
 
 export type PlanningComponentName = (typeof PLANNING_COMPONENT_NAMES)[number];
 
 const noop = () => null;
 
+/** Prompt descriptions by component. The web renderer reuses them so both sides describe the same contract. */
+const descriptions: Partial<Record<PlanningComponentName, string>> = {};
+
 function define(name: PlanningComponentName, description: string, props: z.ZodObject) {
+  descriptions[name] = description;
   return defineComponent({ name, description, props, component: noop });
 }
+
+export const planningComponentDescriptions = descriptions as Record<PlanningComponentName, string>;
 
 const TripHeroSchema = z.object({
   tripId: refIdSchema,
@@ -174,6 +189,108 @@ const QuickActions = define(
   QuickActionsSchema,
 );
 
+/** Travel-guide blocks do not depend on the saved trip, so they take text and place names only. */
+const LeadSchema = z.object({
+  text: safeText(600),
+});
+export { LeadSchema };
+const Lead = define(
+  "Lead",
+  "Editorial opening paragraph (two or three sentences) that directly answers a general travel question. Plain text; never prices, opening hours, visa rules, ratings or URLs.",
+  LeadSchema,
+);
+
+const PlaceCardSchema = z.object({
+  name: safeText(80),
+  note: optionalSafeText(240),
+});
+export { PlaceCardSchema };
+const PlaceCard = define(
+  "PlaceCard",
+  "One destination, shown with a photograph the app finds for the place name. Pass a name with its region, for example 'Ella, Sri Lanka'. Add a short note about why it suits the question. Never pass a URL or image.",
+  PlaceCardSchema,
+);
+
+const PlaceGallerySchema = z.object({
+  title: optionalSafeText(80),
+  places: z.array(safeText(80)).min(1).max(8),
+});
+export { PlaceGallerySchema };
+const PlaceGallery = define(
+  "PlaceGallery",
+  "A browsable row of destinations or sights with photographs. Each place name should include its region, for example 'Kandy, Sri Lanka'. Selecting a place opens its description. Use it when the user asks where to go or what to see.",
+  PlaceGallerySchema,
+);
+
+const DayPlanSchema = z.object({
+  day: safeText(40),
+  title: safeText(100),
+  activities: z.array(safeText(200)).min(1).max(8),
+});
+export { DayPlanSchema };
+const DayPlan = define(
+  "DayPlan",
+  "One day of a suggested route or itinerary idea: a label such as 'Day 1', a headline and up to eight activities in order. Ideas, not bookings. Use several DayPlan blocks for a multi-day plan.",
+  DayPlanSchema,
+);
+
+const TipListSchema = z.object({
+  title: safeText(100),
+  tips: z.array(safeText(220)).min(1).max(12),
+});
+export { TipListSchema };
+const TipList = define(
+  "TipList",
+  "A practical checklist: packing items, things to book in advance, etiquette or local tips. Readers can tick items off. Plain text only.",
+  TipListSchema,
+);
+
+const KeyFactsSchema = z.object({
+  title: optionalSafeText(100),
+  facts: z.array(safeText(160)).min(1).max(10),
+});
+export { KeyFactsSchema };
+const KeyFacts = define(
+  "KeyFacts",
+  "Quick reference facts as 'Label: value' strings, for example 'Best season: December to March'. General guidance only; never prices or live data.",
+  KeyFactsSchema,
+);
+
+const CalloutSchema = z.object({
+  tone: z.enum(["info", "tip", "caution"]),
+  title: safeText(100),
+  body: optionalSafeText(400),
+});
+export { CalloutSchema };
+const Callout = define(
+  "Callout",
+  "A highlighted note. Use tone 'caution' for entry requirements, health, safety or money rules and name the official source to check. Use 'tip' for a helpful shortcut and 'info' for context.",
+  CalloutSchema,
+);
+
+const ComparisonTableSchema = z.object({
+  title: optionalSafeText(100),
+  columns: z.array(safeText(40)).min(2).max(5),
+  rows: z.array(z.array(safeText(160)).min(2).max(6)).min(1).max(8),
+});
+export { ComparisonTableSchema };
+const ComparisonTable = define(
+  "ComparisonTable",
+  "A small comparison table of qualitative differences, for example regions, seasons or travel styles. Each row lists its label then one cell per column. Never put prices, ratings or availability here.",
+  ComparisonTableSchema,
+);
+
+const FollowUpsSchema = z.object({
+  title: optionalSafeText(60),
+  questions: z.array(safeText(160)).min(1).max(6),
+});
+export { FollowUpsSchema };
+const FollowUps = define(
+  "FollowUps",
+  "Tappable next questions for the user, each sent as their next message. Use it at the end of a travel answer with two to four specific questions.",
+  FollowUpsSchema,
+);
+
 const PlanningCanvasSchema = z.object({
   title: safeText(80),
   blocks: z.array(
@@ -192,6 +309,15 @@ const PlanningCanvasSchema = z.object({
       RouteSummary.ref,
       RecommendationExplanation.ref,
       QuickActions.ref,
+      Lead.ref,
+      PlaceCard.ref,
+      PlaceGallery.ref,
+      DayPlan.ref,
+      TipList.ref,
+      KeyFacts.ref,
+      Callout.ref,
+      ComparisonTable.ref,
+      FollowUps.ref,
     ]),
   ),
   subtitle: optionalSafeText(300),
@@ -219,6 +345,15 @@ export const planningComponents = [
   RouteSummary,
   RecommendationExplanation,
   QuickActions,
+  Lead,
+  PlaceCard,
+  PlaceGallery,
+  DayPlan,
+  TipList,
+  KeyFacts,
+  Callout,
+  ComparisonTable,
+  FollowUps,
 ];
 
 export const planningComponentGroups = [
@@ -246,6 +381,16 @@ export const planningComponentGroups = [
     ],
   },
   {
+    name: "Travel guide",
+    components: ["Lead", "PlaceGallery", "PlaceCard", "DayPlan", "TipList", "KeyFacts", "Callout", "ComparisonTable", "FollowUps"],
+    notes: [
+      "Use these for general travel questions that do not need the saved trip: destinations, seasons, things to see, route and day ideas, packing, etiquette and planning advice.",
+      "Open with Lead, then choose two or three visual blocks such as PlaceGallery, DayPlan or TipList. Finish with FollowUps.",
+      "PlaceCard and PlaceGallery take a place name with its region only; the app supplies the photograph, so never pass a URL or image.",
+      "General guidance is qualitative. Do not state prices, fares, opening hours, visa rules, ratings or availability as facts; use a caution Callout and name the official source instead.",
+    ],
+  },
+  {
     name: "Hotels, packages & budget",
     components: ["HotelCard", "HotelComparison", "PackageSummary", "PackageComparison", "BudgetMeter", "RecommendationExplanation", "CostBreakdown"],
     notes: [
@@ -256,6 +401,38 @@ export const planningComponentGroups = [
     ],
   },
 ];
+
+/**
+ * Zod prop schema for every component. The OpenUI parser checks types and required arguments, but not
+ * lengths or bounds, so the server validates each node against these schemas as well. The canvas is
+ * checked on its framing fields only: its block references are validated by the parser.
+ */
+export const PLANNING_PROP_SCHEMAS = {
+  PlanningCanvas: PlanningCanvasSchema.pick({ title: true, subtitle: true }),
+  TripHero: TripHeroSchema,
+  TripRequirementSummary: TripRequirementSummarySchema,
+  ClarificationForm: ClarificationFormSchema,
+  DestinationTimeline: DestinationTimelineSchema,
+  TripMap: TripMapSchema,
+  HotelCard: HotelCardSchema,
+  HotelComparison: HotelComparisonSchema,
+  PackageSummary: PackageSummarySchema,
+  PackageComparison: PackageComparisonSchema,
+  BudgetMeter: BudgetMeterSchema,
+  CostBreakdown: CostBreakdownSchema,
+  RouteSummary: RouteSummarySchema,
+  RecommendationExplanation: RecommendationExplanationSchema,
+  QuickActions: QuickActionsSchema,
+  Lead: LeadSchema,
+  PlaceCard: PlaceCardSchema,
+  PlaceGallery: PlaceGallerySchema,
+  DayPlan: DayPlanSchema,
+  TipList: TipListSchema,
+  KeyFacts: KeyFactsSchema,
+  Callout: CalloutSchema,
+  ComparisonTable: ComparisonTableSchema,
+  FollowUps: FollowUpsSchema,
+} as const satisfies Record<PlanningComponentName, z.ZodType>;
 
 type PlanningLibrary = ReturnType<typeof createLibrary>;
 let cachedLibrary: PlanningLibrary | null = null;

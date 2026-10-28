@@ -38,12 +38,19 @@ planningRoutes.get("/trips/:id/planning", requirePermission("trips:read"), async
   });
 });
 
+/** Overall budget for one turn, covering the first attempt and its single repair. */
+const TURN_TIMEOUT_MS = 60_000;
+/** One generation plus one repair. A second failure falls back to the standard view. */
+const MAX_ATTEMPTS = 2;
+
 /**
  * A single planning turn. The snapshot is sent before generation so the client can render from
- * authoritative data while OpenUI Lang streams. `done.program` is always the validated program the
- * client should settle on (the deterministic fallback when generation or validation fails).
+ * authoritative data while OpenUI Lang streams. If a reply fails validation, the client receives a
+ * `reset` event and one repair attempt streams with the validation problems attached. `done.program`
+ * is always the validated program the client should settle on (the deterministic fallback when
+ * generation or validation still fails).
  */
-planningRoutes.post("/trips/:id/planning", requirePermission("trips:read"), rateLimit({ name: "planning", limit: 40, windowSeconds: 3_600, by: "user" }), async (c) => {
+planningRoutes.post("/trips/:id/planning", requirePermission("trips:read"), rateLimit({ name: "planning", limit: 60, windowSeconds: 3_600, by: "user" }), async (c) => {
   const id = requireParam(c, "id");
   const body = await parseBody(c, turnSchema);
   const started = Date.now();
@@ -52,6 +59,8 @@ planningRoutes.post("/trips/:id/planning", requirePermission("trips:read"), rate
   const llm = integrations.aiEngine === "rules" ? null : c.get("deps").buildLlm(c.env);
   const available = !!llm && (!!llm.stream || !!llm.generate);
   const starters = planningStarters(snapshot);
+  const organizationId = c.get("auth")!.organizationId!;
+  const inputChars = body.message.length + body.history.reduce((total, item) => total + item.content.length, 0);
 
   c.header("cache-control", "no-store");
   c.header("x-accel-buffering", "no");
@@ -66,7 +75,7 @@ planningRoutes.post("/trips/:id/planning", requirePermission("trips:read"), rate
     const timer = setTimeout(() => {
       timedOut.value = true;
       controller.abort();
-    }, 30_000);
+    }, TURN_TIMEOUT_MS);
     const write = async (event: string, data: unknown) => {
       if (clientAborted) return false;
       try {
@@ -77,8 +86,10 @@ planningRoutes.post("/trips/:id/planning", requirePermission("trips:read"), rate
         return false;
       }
     };
-    let generated = "";
+    const record = (engine: string, model: string | null, outputChars: number, status: "ok" | "fallback") =>
+      ops.recordAiUsage(c.get("db"), { organizationId, operation: "planning_turn", engine, model, inputChars, outputChars, latencyMs: Date.now() - started, status });
     let usedFallback = false;
+    let attempts = 0;
     try {
       const metaSent = await write("meta", {
         snapshot,
@@ -98,100 +109,75 @@ planningRoutes.post("/trips/:id/planning", requirePermission("trips:read"), rate
           model: null,
           usedFallback: true,
           reason: "unavailable",
+          attempts: 0,
           warnings: ["AI generation is not configured, so a standard summary is shown."],
         });
-        await ops.recordAiUsage(c.get("db"), {
-          organizationId: c.get("auth")!.organizationId!,
-          operation: "planning_turn",
-          engine: "rules",
-          model: null,
-          inputChars: body.message.length + body.history.reduce((total, item) => total + item.content.length, 0),
-          outputChars: program.length,
-          latencyMs: Date.now() - started,
-          status: "fallback",
-        });
+        await record("rules", null, program.length, "fallback");
         return;
       }
-      try {
-        const result = await streamPlanningProgram(llm, snapshot, body, (chunk) => void write("delta", { text: chunk }), controller.signal);
-        generated = result.text;
-        const validation = validatePlanningProgram(result.text, snapshot);
-        if (!validation.ok) {
+
+      let repair: { previousReply: string; problems: string[] } | undefined;
+      let outputChars = 0;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+        attempts = attempt;
+        if (attempt > 1 && !(await write("reset", { attempt, reason: "repair" }))) return;
+        let text = "";
+        try {
+          const result = await streamPlanningProgram(llm, snapshot, { message: body.message, history: body.history, repair }, (chunk) => void write("delta", { text: chunk }), controller.signal);
+          text = result.text;
+          outputChars += text.length;
+          const validation = validatePlanningProgram(text, snapshot);
+          if (validation.ok) {
+            await write("done", { program: text, engine: result.engine, model: result.model, usedFallback: false, attempts, warnings: result.warnings });
+            await record(result.engine, result.model, outputChars, "ok");
+            await audit(c, "trip.planning_turn", "trip", id, { engine: result.engine, fallback: false, attempts });
+            return;
+          }
+          repair = { previousReply: text, problems: validation.errors.slice(0, 5) };
+          if (attempt === MAX_ATTEMPTS) {
+            usedFallback = true;
+            const program = buildFallbackProgram(snapshot, "invalid");
+            await write("done", {
+              program,
+              engine: result.engine,
+              model: result.model,
+              usedFallback: true,
+              reason: "invalid",
+              attempts,
+              warnings: ["The generated interface did not pass validation, so a standard summary is shown."],
+              validationErrors: repair.problems,
+            });
+            await record(result.engine, result.model, outputChars, "fallback");
+            await audit(c, "trip.planning_turn", "trip", id, { engine: result.engine, fallback: true, attempts });
+            return;
+          }
+        } catch (error) {
+          if (clientAborted) return;
           usedFallback = true;
-          const program = buildFallbackProgram(snapshot, "invalid");
+          const timedOutNow = timedOut.value;
+          const message =
+            error instanceof PlanningUnavailableError
+              ? "AI generation is not configured."
+              : timedOutNow
+                ? "AI generation timed out."
+                : "AI generation failed.";
           await write("done", {
-            program,
-            engine: result.engine,
-            model: result.model,
+            program: buildFallbackProgram(snapshot, "unavailable"),
+            engine: "rules",
+            model: null,
             usedFallback: true,
-            reason: "invalid",
-            warnings: ["The generated interface did not pass validation, so a standard summary is shown."],
-            validationErrors: validation.errors.slice(0, 5),
+            reason: timedOutNow ? "timeout" : "error",
+            attempts,
+            warnings: [`${message} A standard summary is shown.`],
           });
-          await ops.recordAiUsage(c.get("db"), {
-            organizationId: c.get("auth")!.organizationId!,
-            operation: "planning_turn",
-            engine: result.engine,
-            model: result.model,
-            inputChars: body.message.length,
-            outputChars: result.text.length,
-            latencyMs: Date.now() - started,
-            status: "fallback",
-          });
+          await record(llm?.engine ?? "rules", llm?.model ?? null, outputChars + text.length, "fallback");
+          await audit(c, "trip.planning_turn", "trip", id, { engine: llm?.engine ?? "rules", fallback: true, attempts });
           return;
         }
-        await write("done", {
-          program: result.text,
-          engine: result.engine,
-          model: result.model,
-          usedFallback: false,
-          warnings: result.warnings,
-        });
-        await ops.recordAiUsage(c.get("db"), {
-          organizationId: c.get("auth")!.organizationId!,
-          operation: "planning_turn",
-          engine: result.engine,
-          model: result.model,
-          inputChars: body.message.length,
-          outputChars: result.text.length,
-          latencyMs: Date.now() - started,
-          status: "ok",
-        });
-      } catch (error) {
-        if (clientAborted) return;
-        usedFallback = true;
-        const program = buildFallbackProgram(snapshot, "unavailable");
-        const message =
-          error instanceof PlanningUnavailableError
-            ? "AI generation is not configured."
-            : error instanceof PlanningGenerationError
-              ? timedOut.value
-                ? "AI generation timed out."
-                : "AI generation failed."
-              : "AI generation failed.";
-        await write("done", {
-          program,
-          engine: "rules",
-          model: null,
-          usedFallback: true,
-          reason: timedOut.value ? "timeout" : "error",
-          warnings: [`${message} A standard summary is shown.`],
-        });
-        await ops.recordAiUsage(c.get("db"), {
-          organizationId: c.get("auth")!.organizationId!,
-          operation: "planning_turn",
-          engine: llm?.engine ?? "rules",
-          model: llm?.model ?? null,
-          inputChars: body.message.length,
-          outputChars: generated.length,
-          latencyMs: Date.now() - started,
-          status: "fallback",
-        });
       }
     } finally {
       clearTimeout(timer);
     }
-    await audit(c, "trip.planning_turn", "trip", id, { engine: llm?.engine ?? "rules", fallback: usedFallback });
   });
 });
 

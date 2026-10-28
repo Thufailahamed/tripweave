@@ -94,6 +94,8 @@ export async function streamPlanningTurn(args: {
   signal: AbortSignal;
   onMeta: (meta: PlanningContextResponse & { fallbackAvailable?: boolean }) => void;
   onDelta: (text: string) => void;
+  /** The server discarded the streamed draft and is repairing it; clear what was shown. */
+  onReset: () => void;
   onDone: (done: PlanningDone) => void;
 }): Promise<void> {
   const response = await fetch(`/api/v1/trips/${args.tripId}/planning`, {
@@ -107,6 +109,7 @@ export async function streamPlanningTurn(args: {
   for await (const frame of frames(response)) {
     if (frame.event === "meta") args.onMeta(frame.data as PlanningContextResponse & { fallbackAvailable?: boolean });
     else if (frame.event === "delta") args.onDelta((frame.data as { text?: string }).text ?? "");
+    else if (frame.event === "reset") args.onReset();
     else if (frame.event === "done") args.onDone(frame.data as PlanningDone);
   }
 }

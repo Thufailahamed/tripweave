@@ -16,7 +16,7 @@ No OpenUI-hosted inference service is required. OpenUI Gateway and Autofix are *
 | Path | Responsibility |
 |---|---|
 | `packages/planning-contract` | The allowlist: component names, Zod prop schemas, descriptions, question/answer schemas and the snapshot TypeScript contract. Shared by API and web. |
-| `packages/ai/src/planning.ts` | Provider-independent planning prompt, context projection, streaming wrapper and optional text generation. |
+| `packages/ai/src/planning.ts` | Provider-independent planning prompt, repair input, context projection, starters and streaming wrapper. |
 | `apps/api/src/services/planning.ts` | Builds the permission-filtered snapshot, validates final programs, builds the deterministic fallback and applies clarification answers. |
 | `apps/api/src/routes/planning.ts` | `GET /trips/:id/planning`, streaming `POST /trips/:id/planning` and `POST /trips/:id/planning/clarifications`. |
 | `apps/web/features/planning` | React component library, renderer panel, SSE client, standard fallback view and tests. |
@@ -45,6 +45,24 @@ Generated replies read like a composed travel journal rather than a dashboard:
 - **Progressive composition.** Blocks stream through the OpenUI renderer, so the interface builds up as the model writes. The server still validates the complete program before treating it as final, and the standard view remains the fallback.
 - **The whole trip dossier.** The trip detail page scopes the same warm palette (`--background`, `--card`, ink primary and terracotta accent) through `.tw-trip`, so the photographic cover, underline tabs, requirement cards, quote cards and planner read as one document. The cover reuses the destination image map and shows the photo credit; the status editor moved from the image into a compact footer control. The plan composer is only sticky once a conversation exists, so it never covers the opening state.
 
+## General travel answers
+
+Replies are no longer limited to the saved trip. The model classifies each request:
+
+- **The saved trip** (requirements, itinerary, packages, hotels, quotes) is grounded in the server snapshot, as before.
+- **General travel advice** (destinations, seasons, things to see, day ideas, packing, etiquette) uses the travel-guide blocks and needs no trip data.
+- **Anything else** gets a short PlanningCanvas saying the assistant helps with travel, with follow-up questions.
+
+General guidance is qualitative. The validator rejects prices, currency amounts and URLs in every string the model writes. General cost, visa, health or safety questions are answered with a caution `Callout` that names the official source.
+
+Destination photographs and short descriptions for place names come from Wikipedia's search API, looked up in the browser (`apps/web/features/planning/place-image.ts`). The model supplies a place name only. Images are accepted only from Wikimedia hosts, every photo credits its article, and a miss shows the generated postcard artwork.
+
+## Generation, repair and variety
+
+- Planning replies are sampled at `PLANNING_TEMPERATURE` (0.6). Structured extraction stays at 0, so the same question no longer returns an identical program.
+- A reply that fails validation gets one repair attempt. The server sends `reset`, which clears the draft, then streams again with the validation problems in a `repairNote`. A second failure falls back to the standard view and says so.
+- The turn timeout is 60 seconds across both attempts. The rate limit is 60 turns per user per hour.
+
 ## Component allowlist
 
 The finite library is defined in `packages/planning-contract/src/library.ts`:
@@ -63,6 +81,7 @@ The finite library is defined in `packages/planning-contract/src/library.ts`:
 - `RouteSummary`
 - `RecommendationExplanation`
 - `QuickActions`
+- `Lead`, `PlaceCard`, `PlaceGallery`, `DayPlan`, `TipList`, `KeyFacts`, `Callout`, `ComparisonTable`, `FollowUps` (travel guide: text and place names only)
 
 `BudgetMeter` normalises the optimiser's 0..1 sub-scores before rendering, and `TripHero` accepts the optional itinerary ref so the model can compose a photographic cover without inventing image URLs.
 
