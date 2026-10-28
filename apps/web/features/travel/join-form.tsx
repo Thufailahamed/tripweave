@@ -13,15 +13,9 @@ import { Field, Input, Select } from "@/components/ui/form";
 import { Turnstile, turnstileEnabled } from "@/components/turnstile";
 import { ApiError, apiGet, apiPost, errorMessage } from "@/lib/api";
 import { SESSION_KEY, type SessionData } from "@/lib/session";
+import { TRAVELER_COUNTRIES } from "./countries";
 
 type Values = z.input<typeof travelerRegisterSchema>;
-
-const COUNTRIES = [
-  ["LK", "Sri Lanka"], ["IN", "India"], ["GB", "United Kingdom"], ["US", "United States"], ["AU", "Australia"],
-  ["CA", "Canada"], ["NZ", "New Zealand"], ["DE", "Germany"], ["FR", "France"], ["NL", "Netherlands"],
-  ["ES", "Spain"], ["IT", "Italy"], ["PT", "Portugal"], ["SE", "Sweden"], ["CH", "Switzerland"],
-  ["IE", "Ireland"], ["AE", "United Arab Emirates"], ["SG", "Singapore"], ["JP", "Japan"], ["ZA", "South Africa"],
-] as const;
 
 export function TravelerJoinForm() {
   const router = useRouter();
@@ -80,7 +74,7 @@ export function TravelerJoinForm() {
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Country" htmlFor="country" error={formState.errors.country?.message}>
             <Select id="country" autoComplete="country" {...register("country")}>
-              {COUNTRIES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+              {TRAVELER_COUNTRIES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
             </Select>
           </Field>
           <Field label="Default currency" htmlFor="defaultCurrency" error={formState.errors.defaultCurrency?.message}>
