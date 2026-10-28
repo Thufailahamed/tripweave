@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TravelerBudgetItem, TravelerPackingItem } from "@tripweave/shared";
-import { allocateTravelerRooms, budgetTotals, createTripFromWizard, daysUntil, packingProgress, travelerTripPayload, tripDestination, type WizardApi } from "./lib";
+import { allocateTravelerRooms, budgetTotals, createTripFromWizard, daysUntil, packageStayEstimate, packingProgress, travelerTripPayload, tripDestination, type WizardApi } from "./lib";
+import type { PackageView } from "@/features/trips/types";
 
 const budgetItem = (over: Partial<TravelerBudgetItem>): TravelerBudgetItem => ({
   id: "b1",
@@ -172,5 +173,25 @@ describe("createTripFromWizard", () => {
     const result = await createTripFromWizard({ ...wizardInput, idea: "", destinations: [] }, api);
     expect(result).toMatchObject({ tripId: "t1", parsed: false, itineraryCreated: false });
     expect(calls).toEqual(["POST /trips"]);
+  });
+});
+
+describe("packageStayEstimate", () => {
+  const pkg = {
+    pricing: { currency: "USD", sellingPriceMinor: 42_000, totalPayableMinor: 42_000, sellingTaxMinor: 0, warnings: [] },
+    package: {
+      selections: [
+        { destination: "Kandy", offer: { property: { name: "Kandy House" } } },
+        { destination: "Ella", offer: { property: { name: "Ella Retreat" } } },
+      ],
+    },
+  } as unknown as PackageView;
+
+  it("turns a priced package into a readable budget item", () => {
+    expect(packageStayEstimate(pkg)).toEqual({ label: "Stay: Kandy House · Ella Retreat", amountMinor: 42_000, currency: "USD" });
+  });
+
+  it("returns null when the package has no selling price", () => {
+    expect(packageStayEstimate({ ...pkg, pricing: null } as PackageView)).toBeNull();
   });
 });

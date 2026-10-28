@@ -6,7 +6,7 @@ import {
   type TravelerPackingItem,
   type TripRequestInput,
 } from "@tripweave/shared";
-import type { Trip } from "@/features/trips/types";
+import type { PackageView, Trip } from "@/features/trips/types";
 
 export interface TripDestinationInput {
   title: string;
@@ -184,6 +184,19 @@ export async function createTripFromWizard(input: TravelerTripInput, api: Wizard
 
   onStage?.("opening");
   return { tripId: trip.id, warnings, parsed, itineraryCreated };
+}
+
+export interface StayEstimate {
+  label: string;
+  amountMinor: number;
+  currency: string;
+}
+
+/** A package's selling price as a budget line. No price means no estimate, never an invented one. */
+export function packageStayEstimate(pkg: PackageView): StayEstimate | null {
+  if (!pkg.pricing || typeof pkg.pricing.sellingPriceMinor !== "number") return null;
+  const names = pkg.package.selections.map((selection) => selection.offer.property.name).filter(Boolean);
+  return { label: names.length > 0 ? `Stay: ${names.join(" · ")}` : "Stay", amountMinor: pkg.pricing.sellingPriceMinor, currency: pkg.pricing.currency };
 }
 
 export type { Trip };
