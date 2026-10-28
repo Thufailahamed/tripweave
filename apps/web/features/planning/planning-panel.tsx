@@ -40,18 +40,43 @@ function newId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-class GeneratedInterfaceBoundary extends React.Component<{ snapshot: PlanningSnapshot; children: React.ReactNode }, { failed: boolean }> {
+class GeneratedInterfaceBoundary extends React.Component<{ snapshot: PlanningSnapshot; mode: "operator" | "traveler"; children: React.ReactNode }, { failed: boolean }> {
   override state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
   }
   override render() {
-    if (this.state.failed) return <PlanningFallbackView snapshot={this.props.snapshot} reason="error" />;
+    if (this.state.failed) return <PlanningFallbackView snapshot={this.props.snapshot} reason="error" mode={this.props.mode} />;
     return this.props.children;
   }
 }
 
-export function PlanningPanel({ tripId }: { tripId: string }) {
+/** Removes operator-only next steps from a traveller's snapshot before any component sees it. */
+function forTraveller(snapshot: PlanningSnapshot): PlanningSnapshot {
+  return {
+    ...snapshot,
+    quotes: [],
+    permissions: { ...snapshot.permissions, canCreateQuotes: false },
+    allowedActions: snapshot.allowedActions.filter((action) => action !== "open_quote"),
+  };
+}
+
+function restoreMessages(persistKey: string | undefined): Turn[] {
+  if (!persistKey || typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(persistKey);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((turn): turn is Turn => !!turn && typeof turn === "object" && (turn as Turn).role !== undefined && typeof (turn as Turn).content === "string").map((turn) => (turn.status === "streaming" ? { ...turn, status: "error" as const, errors: ["This reply was interrupted when the page was closed."] } : turn)).slice(-20);
+  } catch {
+    return [];
+  }
+}
+
+export function PlanningPanel({ tripId, mode = "operator", persistKey }: { tripId: string; mode?: "operator" | "traveler"; persistKey?: string }) {
+  const traveler = mode === "traveler";
+  const basePath = traveler ? `/travel/trips/${tripId}` : `/trips/${tripId}`;
   const qc = useQueryClient();
   const router = useRouter();
   const library = React.useMemo(() => getPlanningLibrary(), []);
@@ -59,7 +84,7 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
   const [snapshot, setSnapshot] = React.useState<PlanningSnapshot | null>(null);
   const [starters, setStarters] = React.useState<PlanningStarter[]>([]);
   const [engineAvailable, setEngineAvailable] = React.useState(false);
-  const [messages, setMessages] = React.useState<Turn[]>([]);
+  const [messages, setMessages] = React.useState<Turn[]>(() => restoreMessages(persistKey));
   const [input, setInput] = React.useState("");
   const [streaming, setStreaming] = React.useState(false);
   const [notice, setNotice] = React.useState<{ tone: "info" | "danger"; text: string } | null>(null);
@@ -69,10 +94,20 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
 
   React.useEffect(() => {
     if (!initial.data) return;
-    setSnapshot(initial.data.snapshot);
+    setSnapshot(traveler ? forTraveller(initial.data.snapshot) : initial.data.snapshot);
     setStarters(initial.data.starters);
     setEngineAvailable(initial.data.engineAvailable);
-  }, [initial.data]);
+  }, [initial.data, traveler]);
+
+  React.useEffect(() => {
+    if (!persistKey || typeof window === "undefined") return;
+    try {
+      if (messages.length === 0) window.localStorage.removeItem(persistKey);
+      else window.localStorage.setItem(persistKey, JSON.stringify(messages.slice(-20)));
+    } catch {
+      /* A full or unavailable storage must never break the planner. */
+    }
+  }, [messages, persistKey]);
 
   React.useEffect(() => {
     const node = scrollRef.current;
@@ -125,10 +160,11 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
               history,
               signal: controller.signal,
               onMeta: (meta) => {
-                setSnapshot(meta.snapshot);
+                const nextSnapshot = traveler ? forTraveller(meta.snapshot) : meta.snapshot;
+                setSnapshot(nextSnapshot);
                 setStarters(meta.starters);
                 setEngineAvailable(meta.engineAvailable);
-                patchTurn(assistantId, { snapshot: meta.snapshot });
+                patchTurn(assistantId, { snapshot: nextSnapshot });
               },
               onDelta: (chunk) => setMessages((current) => current.map((message) => (message.id === assistantId ? { ...message, content: message.content + chunk } : message))),
               onReset: () => patchTurn(assistantId, { content: "", warnings: [], errors: [] }),
@@ -161,7 +197,7 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
         setStreaming(false);
       }
     },
-    [messages, patchTurn, snapshot, streaming, tripId],
+    [messages, patchTurn, snapshot, streaming, traveler, tripId],
   );
 
   const stop = React.useCallback(() => {
@@ -218,18 +254,22 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
         return;
       }
       if (event.type === "open_packages") {
-        router.push(`/trips/${tripId}/packages`);
+        router.push(traveler ? `${basePath}/stays` : `${basePath}/packages`);
         return;
       }
       if (event.type === "open_itinerary") {
-        router.push(`/trips/${tripId}/itinerary`);
+        router.push(`${basePath}/itinerary`);
         return;
       }
       if (event.type === "open_optimise") {
-        router.push(`/trips/${tripId}/optimise`);
+        router.push(traveler ? `${basePath}/stays` : `${basePath}/optimise`);
         return;
       }
       if (event.type === "open_quote") {
+        if (traveler) {
+          toast("Quotes are not part of your personal trip.");
+          return;
+        }
         const quoteId = typeof event.params.quoteId === "string" ? event.params.quoteId : "";
         if (!snapshot.quotes.some((quote) => quote.id === quoteId)) {
           toast.error("That quotation is no longer available.");
@@ -240,7 +280,7 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
       }
       toast.error("That action is not available here.");
     },
-    [qc, router, send, snapshot, tripId],
+    [basePath, qc, router, send, snapshot, traveler, tripId],
   );
 
   const topRef = React.useRef<HTMLElement | null>(null);
@@ -249,8 +289,11 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
     setMessages([]);
     setNotice(null);
     setInput("");
+    if (persistKey && typeof window !== "undefined") {
+      try { window.localStorage.removeItem(persistKey); } catch { /* ignore */ }
+    }
     topRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
-  }, []);
+  }, [persistKey]);
 
   if (initial.isLoading && !snapshot) return <LoadingBlock label="Loading planning context" />;
   if (initial.isError && !snapshot) return <ErrorState error={initial.error} onRetry={() => initial.refetch()} title="Could not load the planning assistant" />;
@@ -372,9 +415,9 @@ export function PlanningPanel({ tripId }: { tripId: string }) {
                 </Alert>
               ) : null}
               {showFallback && message.snapshot ? (
-                <PlanningFallbackView snapshot={message.snapshot} reason={message.standardView ? "manual" : message.reason === "invalid" ? "invalid" : message.usedFallback ? "unavailable" : "error"} onRetry={retry} />
+                <PlanningFallbackView snapshot={message.snapshot} reason={message.standardView ? "manual" : message.reason === "invalid" ? "invalid" : message.usedFallback ? "unavailable" : "error"} onRetry={retry} mode={mode} />
               ) : message.snapshot ? (
-                <GeneratedInterfaceBoundary snapshot={message.snapshot}>
+                <GeneratedInterfaceBoundary snapshot={message.snapshot} mode={mode}>
                   <PlanningProvider snapshot={message.snapshot}>
                     <Renderer
                       library={library}

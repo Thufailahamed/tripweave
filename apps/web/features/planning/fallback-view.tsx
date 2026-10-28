@@ -12,8 +12,10 @@ import { VerificationBadge } from "./ui";
  * Normal, non-generative view over the same authoritative snapshot. Used when generation is
  * unavailable/invalid, when the renderer throws, or when a reader explicitly asks for standard view.
  */
-export function PlanningFallbackView({ snapshot, reason, onRetry }: { snapshot: PlanningSnapshot; reason?: "unavailable" | "invalid" | "error" | "manual"; onRetry?: () => void }) {
+export function PlanningFallbackView({ snapshot, reason, onRetry, mode = "operator" }: { snapshot: PlanningSnapshot; reason?: "unavailable" | "invalid" | "error" | "manual"; onRetry?: () => void; mode?: "operator" | "traveler" }) {
   const { trip, itinerary, packages } = snapshot;
+  const traveler = mode === "traveler";
+  const base = traveler ? `/travel/trips/${trip.id}` : `/trips/${trip.id}`;
   const notice =
     reason === "invalid"
       ? "The generated interface did not pass validation. This standard view uses the same server data."
@@ -27,19 +29,19 @@ export function PlanningFallbackView({ snapshot, reason, onRetry }: { snapshot: 
       <Alert tone={reason === "manual" ? "info" : "warning"} title={notice}>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <Button asChild size="sm" variant="outline">
-            <Link href={`/trips/${trip.id}/packages`}>
-              <FileText /> Packages
+            <Link href={`${base}/${traveler ? "stays" : "packages"}`}>
+              <FileText /> {traveler ? "Stays" : "Packages"}
             </Link>
           </Button>
           <Button asChild size="sm" variant="outline">
-            <Link href={`/trips/${trip.id}/itinerary`}>
+            <Link href={`${base}/itinerary`}>
               <Route /> Itinerary
             </Link>
           </Button>
           {snapshot.permissions.canRunOptimisation ? (
             <Button asChild size="sm" variant="outline">
-              <Link href={`/trips/${trip.id}/optimise`}>
-                <Wand2 /> Optimise
+              <Link href={`${base}/${traveler ? "stays" : "optimise"}`}>
+                <Wand2 /> {traveler ? "Find stays" : "Optimise"}
               </Link>
             </Button>
           ) : null}
@@ -119,7 +121,7 @@ export function PlanningFallbackView({ snapshot, reason, onRetry }: { snapshot: 
           action={
             snapshot.permissions.canRunOptimisation ? (
               <Button asChild variant="outline">
-                <Link href={`/trips/${trip.id}/optimise`}>Configure optimisation</Link>
+                <Link href={`${base}/${traveler ? "stays" : "optimise"}`}>{traveler ? "Find stay ideas" : "Configure optimisation"}</Link>
               </Button>
             ) : undefined
           }
@@ -156,7 +158,7 @@ export function PlanningFallbackView({ snapshot, reason, onRetry }: { snapshot: 
                   </p>
                 ) : null}
                 <Button asChild size="sm" variant="outline" className="mt-auto self-start">
-                  <Link href={`/trips/${trip.id}/packages`}>Open packages</Link>
+                  <Link href={`${base}/${traveler ? "stays" : "packages"}`}>{traveler ? "Open stays" : "Open packages"}</Link>
                 </Button>
               </CardContent>
             </Card>

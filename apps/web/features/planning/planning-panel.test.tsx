@@ -32,11 +32,11 @@ function done(program: string, extra: Record<string, unknown> = {}) {
   return { program, engine: "external_llm", model: "fake", usedFallback: false, warnings: [], ...extra };
 }
 
-function renderPanel() {
+function renderPanel(props: { mode?: "operator" | "traveler"; persistKey?: string } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <PlanningPanel tripId="trip_1" />
+      <PlanningPanel tripId="trip_1" {...props} />
     </QueryClientProvider>,
   );
 }
@@ -145,6 +145,27 @@ describe("PlanningPanel", () => {
     const open = await screen.findByRole("button", { name: /Open packages/i });
     await user.click(open);
     expect(push).toHaveBeenCalledWith("/trips/trip_1/packages");
+  });
+
+  it("routes traveller-mode next steps into the personal trip workspace", async () => {
+    const user = userEvent.setup();
+    const actionsProgram = `root = PlanningCanvas("Next", [actions])\nactions = QuickActions()`;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if ((init?.method ?? "GET") === "GET") return jsonResponse({ data: context });
+        return sseResponse([
+          { event: "meta", data: { ...context, fallbackAvailable: true } },
+          { event: "done", data: done(actionsProgram) },
+        ]);
+      }),
+    );
+    renderPanel({ mode: "traveler" });
+    await screen.findByRole("heading", { name: "What shall we plan next?" });
+    await user.click(screen.getByRole("button", { name: "Summarise the trip" }));
+    const open = await screen.findByRole("button", { name: /Packages/i });
+    await user.click(open);
+    expect(push).toHaveBeenCalledWith("/travel/trips/trip_1/stays");
   });
 
   it("leaves a readable fallback and retry control when the request fails", async () => {
