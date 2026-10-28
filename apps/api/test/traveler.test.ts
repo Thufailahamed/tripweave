@@ -101,6 +101,33 @@ describe("traveller itinerary boundaries", () => {
   });
 });
 
+describe("applying a planner day", () => {
+  it("merges activities into the chosen stop without duplicates and preserves the route status", async () => {
+    const h = new Harness();
+    const { c, tripId } = await travelerWithTrip(h);
+    const before = await c.ok<{ itinerary: { id: string; status: string; stops: { id: string; destination: string; activities: string[] }[] } }>("GET", `/trips/${tripId}/itinerary`);
+    const stop = before.itinerary.stops[1]!;
+    const applied = await c.ok<{ itinerary: { id: string; status: string; stops: { id: string; destination: string; activities: string[] }[] } }>("POST", `/trips/${tripId}/itinerary/activities`, {
+      stopId: stop.id,
+      activities: ["Little Adam's Peak hike", "Tea factory visit", "tea factory visit"],
+    });
+    const updated = applied.itinerary.stops.find((entry) => entry.destination === "Ella")!;
+    expect(updated.activities).toContain("Little Adam's Peak hike");
+    expect(updated.activities).toContain("Tea factory visit");
+    expect(updated.activities.filter((activity) => activity.toLowerCase() === "tea factory visit")).toHaveLength(1);
+    expect(applied.itinerary.status).toBe(before.itinerary.status);
+    expect(applied.itinerary.id).not.toBe(before.itinerary.id);
+
+    const again = await c.ok<{ itinerary: { stops: { id: string; destination: string; activities: string[] }[] } }>("POST", `/trips/${tripId}/itinerary/activities`, { stopId: updated.id, activities: ["Tea factory visit"] });
+    expect(again.itinerary.stops.find((entry) => entry.destination === "Ella")!.activities.filter((activity) => activity.toLowerCase() === "tea factory visit")).toHaveLength(1);
+
+    const invalid = await c.post(`/trips/${tripId}/itinerary/activities`, { stopId: "not-a-stop", activities: ["Nope"] });
+    expect(invalid.status).toBe(404);
+    const tooMany = await c.post(`/trips/${tripId}/itinerary/activities`, { stopId: updated.id, activities: Array.from({ length: 13 }, (_, index) => `Activity ${index}`) });
+    expect(tooMany.status).toBe(422);
+  });
+});
+
 describe("traveller planning context", () => {
   it("never exposes quote refs, quote actions or quote permission", async () => {
     const h = new Harness();

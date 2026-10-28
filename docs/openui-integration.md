@@ -101,6 +101,7 @@ The model cannot register components. The library has no `Query()`, `Mutation()`
 | `open_itinerary` | Navigate to the trip's itinerary editor. |
 | `open_optimise` | Navigate to the optimisation page. |
 | `open_quote` | Navigate to an existing quote, only if its ID is in the snapshot. |
+| `apply_day` | Traveller mode only: `DayPlan` and `DayBoard` emit the day's title and activities. The panel opens a stop picker; the chosen stop's activities are merged by `POST /trips/:id/itinerary/activities`. The model does not choose the stop. |
 
 Any other action is ignored and reported to the user. There is no generic `open_url` action.
 
@@ -281,6 +282,11 @@ operator) and an optional `persistKey`:
   and "Itinerary" for a traveller.
 - `QuickActions` reads the mode from `PlanningProvider` and labels the package action
   "Stay ideas" and the optimisation action "Find stays".
+- `DayPlan` and `DayBoard` show **Add to itinerary** in traveller mode. The button emits
+  `apply_day` with the day title and activities; `ApplyDayDialog` asks the reader which
+  stop to merge them into. The server validates the stop, deduplicates activities and
+  preserves the route's draft/suggested/confirmed status. The model never chooses the
+  stop and never writes to the itinerary directly.
 - `persistKey` stores the last 20 turns in browser `localStorage`; New chat clears it.
   The API still does not persist prompts or transcripts.
 

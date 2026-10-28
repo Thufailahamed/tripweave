@@ -51,9 +51,9 @@ function stubPlaces(options: PlaceFixtureOptions = {}) {
   return { fetchMock, requests };
 }
 
-function renderProgram(program: string, onAction = vi.fn()) {
+function renderProgram(program: string, onAction = vi.fn(), mode: "operator" | "traveler" = "operator") {
   render(
-    <PlanningProvider snapshot={makeRichSnapshot()}>
+    <PlanningProvider snapshot={makeRichSnapshot()} mode={mode}>
       <Renderer library={getPlanningLibrary()} response={program} onAction={onAction} publishObservability={false} />
     </PlanningProvider>,
   );
@@ -117,6 +117,17 @@ day = DayPlan("Day 2", "Slow morning", ["Breakfast on the terrace"])`);
     expect(onAction).toHaveBeenLastCalledWith(expect.objectContaining({ humanFriendlyMessage: expect.stringContaining("Tell me about Ella, Sri Lanka") }));
     fireEvent.click(screen.getByRole("button", { name: "Adjust this day" }));
     expect(onAction).toHaveBeenLastCalledWith(expect.objectContaining({ humanFriendlyMessage: expect.stringContaining("Rework Day 2 (Slow morning)") }));
+  });
+
+  it("offers travellers an apply-to-itinerary action from a day plan", () => {
+    const onAction = renderProgram(`root = PlanningCanvas("Day", [day])\nday = DayPlan("Day 1", "Ridge walk", ["Early walk", "Tea estate visit"])`, vi.fn(), "traveler");
+    fireEvent.click(screen.getByRole("button", { name: "Add to itinerary" }));
+    expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ type: "apply_day", params: { day: "Day 1", title: "Ridge walk", activities: ["Early walk", "Tea estate visit"] } }));
+  });
+
+  it("keeps the apply action out of the operator surface", () => {
+    renderProgram(`root = PlanningCanvas("Day", [day])\nday = DayPlan("Day 1", "Ridge walk", ["Early walk"])`, vi.fn(), "operator");
+    expect(screen.queryByRole("button", { name: "Add to itinerary" })).not.toBeInTheDocument();
   });
 
   it("uses a generated postcard when the place has no free photograph", async () => {

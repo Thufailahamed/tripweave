@@ -75,6 +75,7 @@ remain `candidate_combinations`. There is no second trip model.
 | `GET/POST` | `/api/v1/traveler/trips/:id/packing` | List/create packing items |
 | `PATCH/DELETE` | `/api/v1/traveler/trips/:id/packing/:itemId` | Check/update/delete |
 | `POST` | `/api/v1/traveler/trips/:id/packing/generate` | Add missing activity-aware items |
+| `POST` | `/api/v1/trips/:id/itinerary/activities` | Merge a planner day's activities into a chosen stop |
 | `GET/POST` | `/api/v1/traveler/trips/:id/notes` | List/create notes |
 | `PATCH/DELETE` | `/api/v1/traveler/trips/:id/notes/:noteId` | Update/delete a note |
 | `GET/POST` | `/api/v1/traveler/trips/:id/shares` | List active shares / rotate a link |
@@ -116,6 +117,16 @@ OpenUI allowlist. Traveller mode:
 Structured parsing (free text → dates/party/stops) is an input parser, not a generated
 interface. Packing suggestions are deterministic. Every model-authored user-visible reply
 goes through OpenUI.
+
+### Applying a generated day
+
+`DayPlan` cards and `DayBoard` rows show **Add to itinerary** on a traveller plan. The
+button opens a stop picker; the reader chooses where the day belongs. The API endpoint
+`POST /trips/:id/itinerary/activities` validates that the stop is in that trip, merges
+the activities case-insensitively, ignores duplicates, saves a new itinerary version and
+preserves the route's `draft`/`suggested`/`confirmed` status. Dates, hotels and the rest
+of the route are untouched. The model cannot decide the stop or mutate the itinerary
+directly.
 
 ## Stays and money
 

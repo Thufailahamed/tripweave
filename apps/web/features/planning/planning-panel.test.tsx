@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PlanningPanel } from "./planning-panel";
@@ -166,6 +166,37 @@ describe("PlanningPanel", () => {
     const open = await screen.findByRole("button", { name: /Stay ideas/i });
     await user.click(open);
     expect(push).toHaveBeenCalledWith("/travel/trips/trip_1/stays");
+  });
+
+  it("opens the stop picker and merges a generated day into the itinerary", async () => {
+    const user = userEvent.setup();
+    const dayProgram = `root = PlanningCanvas("Day", [day])\nday = DayPlan("Day 1", "Kandy", ["Temple of the Tooth", "Market walk"])`;
+    let applyBody: unknown = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if ((init?.method ?? "GET") === "GET") return jsonResponse({ data: context });
+        if (url.includes("/itinerary/activities")) {
+          applyBody = JSON.parse(String(init?.body ?? "{}"));
+          return jsonResponse({ data: { itinerary: { stops: [] } } });
+        }
+        return sseResponse([
+          { event: "meta", data: { ...context, fallbackAvailable: true } },
+          { event: "done", data: done(dayProgram) },
+        ]);
+      }),
+    );
+    renderPanel({ mode: "traveler" });
+    await screen.findByRole("heading", { name: "What shall we plan next?" });
+    await user.click(screen.getByRole("button", { name: "Summarise the trip" }));
+    await user.click(await screen.findByRole("button", { name: "Add to itinerary" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/Day 1/)).toBeInTheDocument();
+    const confirm = within(dialog).getByRole("button", { name: /Add 2 activities/ });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    await user.click(confirm);
+    await waitFor(() => expect(applyBody).toEqual({ stopId: "stop_1", activities: ["Temple of the Tooth", "Market walk"] }));
   });
 
   it("leaves a readable fallback and retry control when the request fails", async () => {

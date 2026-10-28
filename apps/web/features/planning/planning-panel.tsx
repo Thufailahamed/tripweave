@@ -10,6 +10,7 @@ import { Alert, ErrorState, LoadingBlock } from "@/components/ui/card";
 import { ApiError, errorMessage } from "@/lib/api";
 import { tripKeys } from "@/features/trips/hooks";
 import { dateRange } from "@/lib/utils";
+import { ApplyDayDialog, type ApplyDay } from "./apply-day-dialog";
 import { PlanningProvider } from "./context";
 import { PlanningFallbackView } from "./fallback-view";
 import { getPlanningLibrary } from "./library";
@@ -88,6 +89,7 @@ export function PlanningPanel({ tripId, mode = "operator", persistKey }: { tripI
   const [input, setInput] = React.useState("");
   const [streaming, setStreaming] = React.useState(false);
   const [notice, setNotice] = React.useState<{ tone: "info" | "danger"; text: string } | null>(null);
+  const [dayApply, setDayApply] = React.useState<ApplyDay | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const composerRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -253,6 +255,20 @@ export function PlanningPanel({ tripId, mode = "operator", persistKey }: { tripI
         }
         return;
       }
+      if (event.type === "apply_day") {
+        const rawActivities = event.params.activities;
+        const activities = Array.isArray(rawActivities)
+          ? rawActivities.filter((value): value is string => typeof value === "string").map((value) => value.trim()).filter(Boolean).slice(0, 12)
+          : [];
+        if (activities.length === 0) {
+          toast.error("That day has no activities to add.");
+          return;
+        }
+        const day = typeof event.params.day === "string" && event.params.day.trim() ? event.params.day.trim().slice(0, 80) : "A day";
+        const title = typeof event.params.title === "string" && event.params.title.trim() ? event.params.title.trim().slice(0, 120) : undefined;
+        setDayApply({ day, title, activities });
+        return;
+      }
       if (event.type === "open_packages") {
         router.push(traveler ? `${basePath}/stays` : `${basePath}/packages`);
         return;
@@ -354,6 +370,7 @@ export function PlanningPanel({ tripId, mode = "operator", persistKey }: { tripI
   );
 
   return (
+    <>
     <section ref={topRef} aria-label="AI planner" className="tw-planner pl-flat mx-auto flex w-full max-w-[880px] flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -470,6 +487,22 @@ export function PlanningPanel({ tripId, mode = "operator", persistKey }: { tripI
         <p className="text-xs text-[var(--pl-muted)]">AI generation is not configured for this organisation. Requests still work and return a readable summary built from the saved trip; general travel questions need AI.</p>
       ) : null}
     </section>
+    <ApplyDayDialog
+      tripId={tripId}
+      mode={mode}
+      itinerary={snapshot?.itinerary ?? null}
+      open={!!dayApply}
+      onOpenChange={(open) => { if (!open) setDayApply(null); }}
+      day={dayApply?.day ?? ""}
+      title={dayApply?.title}
+      activities={dayApply?.activities ?? []}
+      onApplied={() => {
+        void initial.refetch();
+        qc.invalidateQueries({ queryKey: tripKeys.itinerary(tripId) });
+        qc.invalidateQueries({ queryKey: tripKeys.detail(tripId) });
+      }}
+    />
+    </>
   );
 }
 

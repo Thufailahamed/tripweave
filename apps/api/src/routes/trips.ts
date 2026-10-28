@@ -167,6 +167,47 @@ tripRoutes.get("/trips/:id/itinerary", requirePermission("trips:read"), async (c
 
 const putItinerarySchema = itineraryInputSchema.extend({ confirm: z.boolean().default(false) });
 
+const applyDaySchema = z.object({
+  stopId: z.string().min(1).max(64),
+  activities: z.array(z.string().trim().min(1).max(160)).min(1).max(12),
+});
+
+/** Applies a planner-authored day to one stop. Dates and the rest of the route stay untouched. */
+tripRoutes.post("/trips/:id/itinerary/activities", requirePermission("trips:write"), rateLimit({ name: "itinerary-activities", limit: 120, windowSeconds: 3600, by: "user" }), async (c) => {
+  const a = getTenant(c);
+  const id = requireParam(c, "id");
+  await mustGetTrip(c, id);
+  const body = await parseBody(c, applyDaySchema);
+  const itinerary = await trips.getLatestItinerary(c.get("db"), a.organizationId, id);
+  if (!itinerary) throw new AppError("not_found", "No itinerary yet");
+  const stop = itinerary.stops.find((entry) => entry.id === body.stopId);
+  if (!stop) throw new AppError("not_found", "That stop is not part of this itinerary");
+  const seen = new Set(stop.activities.map((activity) => activity.trim().toLowerCase()));
+  const additions: string[] = [];
+  for (const raw of body.activities) {
+    const value = raw.trim();
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) continue;
+    seen.add(key);
+    additions.push(value);
+  }
+  if (additions.length > 0) {
+    const nextStops = itinerary.stops.map((entry) => (entry.id === stop.id ? { ...entry, activities: [...entry.activities, ...additions] } : entry));
+    const status = itinerary.status === "confirmed" ? "confirmed" : itinerary.status === "suggested" ? "suggested" : "draft";
+    await trips.saveItinerary(c.get("db"), id, {
+      title: itinerary.title,
+      summary: itinerary.summary,
+      origin: itinerary.origin ?? undefined,
+      arrivalInformation: itinerary.arrivalInformation,
+      departureInformation: itinerary.departureInformation,
+      status,
+      stops: nextStops,
+    });
+  }
+  await audit(c, "itinerary.activities_applied", "trip", id, { stopId: stop.id, added: additions.length, source: "planner" });
+  return ok(c, await itineraryView(c, id));
+});
+
 tripRoutes.put("/trips/:id/itinerary", requirePermission("trips:write"), async (c) => {
   const a = getTenant(c);
   const id = requireParam(c, "id");

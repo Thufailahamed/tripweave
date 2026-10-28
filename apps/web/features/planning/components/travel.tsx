@@ -15,6 +15,7 @@ import {
   planningComponentDescriptions,
 } from "@tripweave/planning-contract";
 import { cn } from "@/lib/utils";
+import { usePlanningMode } from "../context";
 import { usePlaceImage } from "../place-image";
 import { DestinationPhoto } from "./destination-photo";
 
@@ -134,6 +135,8 @@ export const DayPlan = defineComponent({
   props: DayPlanSchema,
   component: function DayPlanView({ props }) {
     const ask = useAskAssistant();
+    const trigger = useTriggerAction();
+    const mode = usePlanningMode();
     const [done, setDone] = React.useState<number[]>([]);
     const toggle = (position: number) => setDone((current) => (current.includes(position) ? current.filter((item) => item !== position) : [...current, position]));
     return (
@@ -172,9 +175,20 @@ export const DayPlan = defineComponent({
           <span className="text-[11px] text-[var(--pl-muted)]">
             {done.length} of {props.activities.length} ticked off
           </span>
-          <button type="button" className="pl-btn" onClick={() => ask(`Rework ${props.day} (${props.title}) so it is realistic: add rough timings, travel between stops and a rest option.`)}>
-            Adjust this day
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {mode === "traveler" ? (
+              <button
+                type="button"
+                className="pl-btn pl-btn-accent"
+                onClick={() => void trigger("Add this day to my itinerary", undefined, { type: "apply_day", params: { day: props.day, title: props.title, activities: props.activities } })}
+              >
+                <CalendarDays className="size-3.5" aria-hidden /> Add to itinerary
+              </button>
+            ) : null}
+            <button type="button" className="pl-btn" onClick={() => ask(`Rework ${props.day} (${props.title}) so it is realistic: add rough timings, travel between stops and a rest option.`)}>
+              Adjust this day
+            </button>
+          </div>
         </div>
       </article>
     );

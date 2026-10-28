@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
-import { defineComponent } from "@openuidev/react-lang";
-import { ArrowUpRight, Check, Heart, MapPinned, PencilLine, Send, X } from "lucide-react";
+import { defineComponent, useTriggerAction } from "@openuidev/react-lang";
+import { ArrowUpRight, CalendarDays, Check, Heart, MapPinned, PencilLine, Send, X } from "lucide-react";
 import {
   BoardDaySchema,
   ChoiceSchema,
@@ -13,6 +13,7 @@ import {
   planningComponentDescriptions,
 } from "@tripweave/planning-contract";
 import { cn } from "@/lib/utils";
+import { usePlanningMode } from "../context";
 import { usePlaceImage } from "../place-image";
 import { DestinationPhoto } from "./destination-photo";
 import { useAskAssistant } from "./travel";
@@ -314,6 +315,8 @@ function partsOfDay(count: number): string[] {
 
 function DayRow({ day, index }: { day: BoardDayProps; index: number }) {
   const ask = useAskAssistant();
+  const trigger = useTriggerAction();
+  const mode = usePlanningMode();
   const places = (day.places ?? []).filter(Boolean);
   const parts = partsOfDay(places.length);
   const [open, setOpen] = React.useState<number | null>(null);
@@ -326,11 +329,22 @@ function DayRow({ day, index }: { day: BoardDayProps; index: number }) {
           <span className="text-[var(--pl-ink)]">{day.label}</span>
           {day.title ? <span> · {day.title}</span> : null}
         </p>
-        {places.length > 1 ? (
-          <button type="button" className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--pl-muted)] underline-offset-2 transition hover:text-[var(--pl-ink)] hover:underline" onClick={() => ask(`Show ${day.label} on a map: ${places.join(", ")}, with the route between them.`)}>
-            <MapPinned className="size-3" aria-hidden /> Map this day
-          </button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          {places.length > 1 ? (
+            <button type="button" className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--pl-muted)] underline-offset-2 transition hover:text-[var(--pl-ink)] hover:underline" onClick={() => ask(`Show ${day.label} on a map: ${places.join(", ")}, with the route between them.`)}>
+              <MapPinned className="size-3" aria-hidden /> Map this day
+            </button>
+          ) : null}
+          {mode === "traveler" && places.length > 0 ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--pl-accent)] underline-offset-2 transition hover:underline"
+              onClick={() => void trigger("Add this day to my itinerary", undefined, { type: "apply_day", params: { day: day.label, title: day.title, activities: places } })}
+            >
+              <CalendarDays className="size-3" aria-hidden /> Add to itinerary
+            </button>
+          ) : null}
+        </div>
       </div>
       <ul className="pl-scroll flex gap-3 overflow-x-auto pb-1">
         {places.map((place, position) => {
