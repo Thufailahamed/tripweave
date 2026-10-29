@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { AppError, paginationSchema, pricingConfigSchema, quoteCreateSchema, quoteShareSchema, quoteTransitionSchema, quoteVersionSchema, addDays, type QuoteStatus } from "@tripweave/shared";
-import { identity, quotes, trips } from "@tripweave/database";
+import { identity, inventory, quotes, trips } from "@tripweave/database";
 import { renderProposalPdf } from "@tripweave/proposal-renderer";
 import type { Env, Vars } from "../env";
 import { randomToken, sha256Hex } from "../lib/crypto";
@@ -11,6 +11,7 @@ import { sendEmail } from "../services/email";
 import type { StoredPackage } from "../services/pricing";
 import { assertQuotable, assertTransition, buildVersion, clientViewFor, presentVersion, type PackageVerification } from "../services/quotes";
 import { confirmQuoteForBooking } from "../services/booking-confirmation";
+import { stayImageUrl } from "../services/quote-images";
 import { loadPricing, requireFx } from "../services/settings";
 
 export const quoteRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -27,6 +28,8 @@ const EDITABLE: QuoteStatus[] = ["draft", "preparing", "ready_for_review", "sent
 function summary(q: quotes.QuoteRecord, canSeeMargins: boolean) {
   return { ...q, totalCostMinor: canSeeMargins ? q.totalCostMinor : undefined, grossMarginBp: canSeeMargins ? q.grossMarginBp : undefined };
 }
+
+
 
 async function loadPackageForQuote(c: AppContext, packageId: string, tripId: string) {
   const a = getTenant(c);
@@ -74,9 +77,24 @@ quoteRoutes.get("/quotes/:id", requirePermission("quotes:read"), async (c) => {
   if (!version) throw new AppError("not_found", "Version not found");
   const [versions, history, approvals, shares, acceptances, bookingConfirmation] = await Promise.all([quotes.listVersionSummaries(db, q.id), quotes.quoteStatusHistory(db, q.id), quotes.approvalHistory(db, q.id), quotes.listShares(db, q.id), quotes.listAcceptances(db, q.id), quotes.latestBookingConfirmation(db, a.organizationId, q.id, q.currentVersion)]);
   const r = rights(c);
+  const presented = presentVersion(version, r);
+  const pkg = version.package as unknown as StoredPackage;
+  const images = await inventory.firstImagesFor(db, pkg.selections.map((s) => s.offer.property.id));
+  const presentedSelections = (presented.package as unknown as { selections: { offer: { property: { id: string } } }[] }).selections;
+  const versionView = {
+    ...presented,
+    package: {
+      ...(presented.package as Record<string, unknown>),
+      // Stored property photographs win; Google Hotels' own photos are the fallback for provider listings.
+      selections: presentedSelections.map((s, i) => ({
+        ...s,
+        imageUrl: stayImageUrl(images.get(s.offer.property.id), pkg.selections[i]?.offer.providerMetadata),
+      })),
+    },
+  };
   return ok(c, {
     quote: summary(q, r.canSeeMargins),
-    version: presentVersion(version, r),
+    version: versionView,
     versions: versions.map((v) => (r.canSeeMargins ? v : { ...v, totalCostMinor: undefined, grossMarginBp: undefined })),
     history, approvals, shares,
     acceptances: acceptances.map(({ ip_hash: _ipHash, ...rest }) => rest), // never expose the client's hashed IP to staff

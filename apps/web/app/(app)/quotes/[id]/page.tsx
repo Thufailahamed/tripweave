@@ -3,8 +3,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, Coins, FileText, FileX2, History, Lock, Wallet } from "lucide-react";
-import { Alert, Card, CardContent, ErrorState, EmptyState, LoadingBlock, PageHeader, Stat, StatusBadge } from "@/components/ui/card";
+import { CalendarClock, CalendarDays, Coins, FileText, FileX2, History, Hotel, Lock, MapPin, Wallet } from "lucide-react";
+import { Alert, Card, CardContent, ErrorState, EmptyState, LoadingBlock, Stat, StatGrid, StatusBadge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/overlay";
@@ -68,52 +68,83 @@ function QuoteDetail() {
   const { quote, version } = d;
   const isCurrent = version.versionNumber === quote.currentVersion;
   const goVersion = (n: number) => router.replace(n === quote.currentVersion ? `/quotes/${id}` : `/quotes/${id}?version=${n}`);
+  const stays = version.package.selections ?? [];
+  const totalNights = stays.reduce((sum, s) => sum + s.offer.nights, 0);
+  const destinations = [...new Set(stays.map((s) => s.destination))];
 
   return (
     <div>
-      <PageHeader
-        eyebrow={
-          <Link href="/quotes" className="hover:underline">
-            Quotations
-          </Link>
-        }
-        title={quote.quoteNumber}
-        icon={FileText}
-        description={
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <StatusBadge status={quote.status} label={statusLabel(quote.status)} />
-            <span>
-              {quote.customerId ? (
-                <Link href={`/customers/${quote.customerId}`} className="font-medium text-foreground hover:underline">
-                  {quote.customerName ?? "Customer"}
-                </Link>
-              ) : (
-                "No customer"
-              )}
-              {" · "}
-              <Link href={`/trips/${quote.tripRequestId}`} className="hover:underline">
-                {quote.tripTitle ?? "Trip request"}
+      <header className="relative mb-6 overflow-hidden rounded-[28px] border border-border bg-card shadow-[0_18px_50px_-34px_rgba(40,32,20,0.4)]">
+        <div aria-hidden className="absolute inset-0 bg-[radial-gradient(120%_140%_at_100%_0%,var(--accent-soft),transparent_56%)]" />
+        <div aria-hidden className="absolute -right-24 -top-28 size-80 rounded-full border border-accent/15" />
+        <div aria-hidden className="absolute -right-10 -top-14 size-52 rounded-full border border-accent/10" />
+        <div aria-hidden className="absolute inset-x-6 bottom-0 h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent" />
+        <div className="relative flex flex-col gap-6 p-6 md:p-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <p className="tw-eyebrow">
+              <Link href="/quotes" className="hover:underline">
+                Quotations
               </Link>
-            </span>
-          </span>
-        }
-        actions={
-          <>
-            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              Version
-              <Select className="w-auto normal-case" value={version.versionNumber} onChange={(e) => goVersion(Number(e.target.value))} aria-label="Select version">
-                {d.versions.map((v) => (
-                  <option key={v.versionNumber} value={v.versionNumber}>
-                    v{v.versionNumber}
-                    {v.versionNumber === quote.currentVersion ? " (current)" : ""}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            {isCurrent && can("quotes:write") && REVISABLE.includes(quote.status) ? <NewVersionButton quote={quote} version={version} /> : null}
-          </>
-        }
-      />
+            </p>
+            <div className="mt-4 flex items-start gap-4">
+              <span aria-hidden className="hidden size-12 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent sm:flex">
+                <FileText className="size-5" />
+              </span>
+              <div className="min-w-0">
+                <h1 className="font-display text-[40px] font-semibold leading-[1.02] tracking-[-0.055em] md:text-[52px]">{quote.quoteNumber}</h1>
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                  <StatusBadge status={quote.status} label={statusLabel(quote.status)} />
+                  <span>
+                    {quote.customerId ? (
+                      <Link href={`/customers/${quote.customerId}`} className="font-medium text-foreground hover:underline">
+                        {quote.customerName ?? "Customer"}
+                      </Link>
+                    ) : (
+                      "No customer"
+                    )}
+                  </span>
+                  <span aria-hidden>·</span>
+                  <Link href={`/trips/${quote.tripRequestId}`} className="hover:underline">
+                    {quote.tripTitle ?? "Trip request"}
+                  </Link>
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <CalendarDays className="size-4 text-accent" aria-hidden /> Valid until {formatDate(quote.validUntil)}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Hotel className="size-4 text-accent" aria-hidden /> {stays.length} stay{stays.length === 1 ? "" : "s"} · {totalNights} night{totalNights === 1 ? "" : "s"}
+              </span>
+              {destinations.length > 0 ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="size-4 text-accent" aria-hidden /> {destinations.join(" → ")}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col gap-3 lg:items-end">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                Version
+                <Select className="w-auto normal-case" value={version.versionNumber} onChange={(e) => goVersion(Number(e.target.value))} aria-label="Select version">
+                  {d.versions.map((v) => (
+                    <option key={v.versionNumber} value={v.versionNumber}>
+                      v{v.versionNumber}
+                      {v.versionNumber === quote.currentVersion ? " (current)" : ""}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              {isCurrent && can("quotes:write") && REVISABLE.includes(quote.status) ? <NewVersionButton quote={quote} version={version} /> : null}
+            </div>
+            <p className="text-xs text-muted-foreground lg:text-right">
+              Current version v{quote.currentVersion} · updated {formatDate(quote.updatedAt)}
+            </p>
+          </div>
+        </div>
+      </header>
 
       {!isCurrent ? (
         <Alert tone="info" className="mb-4">
@@ -135,18 +166,24 @@ function QuoteDetail() {
         </div>
       ) : null}
 
-      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat icon={Coins} iconTone="accent" label="Selling price" value={money(version.sellingPriceMinor, quote.currency)} hint={`Version ${version.versionNumber}`} />
-        {version.pricing.totalPayableMinor !== undefined ? <Stat icon={Wallet} iconTone="success" label="Total payable" value={money(version.pricing.totalPayableMinor, quote.currency)} hint="Including taxes" /> : null}
-        <Stat icon={CalendarClock} iconTone={quote.status === "expired" ? "warning" : "info"} label="Valid until" value={formatDate(quote.validUntil)} tone={quote.status === "expired" ? "warning" : "default"} hint={quote.status === "expired" ? "Expired" : undefined} />
-        <Stat icon={History} iconTone="primary" label="Created" value={formatDate(version.createdAt)} hint={`Updated ${formatDate(quote.updatedAt)}`} />
-      </div>
+      <StatGrid className="mb-6 grid-cols-2 lg:grid-cols-4">
+        <Stat bare icon={Coins} iconTone="accent" label="Selling price" value={money(version.sellingPriceMinor, quote.currency)} hint={`Version ${version.versionNumber}`} />
+        {version.pricing.totalPayableMinor !== undefined ? <Stat bare icon={Wallet} iconTone="success" label="Total payable" value={money(version.pricing.totalPayableMinor, quote.currency)} hint="Including taxes" /> : null}
+        <Stat bare icon={CalendarClock} iconTone={quote.status === "expired" ? "warning" : "info"} label="Valid until" value={formatDate(quote.validUntil)} tone={quote.status === "expired" ? "warning" : "default"} hint={quote.status === "expired" ? "Expired" : undefined} />
+        <Stat bare icon={History} iconTone="primary" label="Created" value={formatDate(version.createdAt)} hint={`Updated ${formatDate(quote.updatedAt)}`} />
+      </StatGrid>
 
       {isCurrent ? (
-        <Card className="mb-6">
-          <CardContent>
-            <p className="mb-2 text-xs font-medium text-muted-foreground">Actions</p>
-            <LifecycleActions quote={quote} />
+        <Card className="mb-6 overflow-hidden border-accent/25">
+          <CardContent className="relative flex flex-wrap items-center justify-between gap-4 py-4">
+            <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(110deg,var(--accent-soft),transparent_58%)]" />
+            <div className="relative">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">Next step</p>
+              <p className="mt-1 text-sm text-muted-foreground">Issue the quotation, request a review, or record the client&apos;s decision.</p>
+            </div>
+            <div className="relative">
+              <LifecycleActions quote={quote} />
+            </div>
           </CardContent>
         </Card>
       ) : null}
@@ -154,19 +191,22 @@ function QuoteDetail() {
       {isCurrent ? <BookingConfirmationCard quote={quote} confirmation={d.bookingConfirmation} /> : null}
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList aria-label="Quotation sections">
-          <TabsTrigger value="quotation">Quotation</TabsTrigger>
-          <TabsTrigger value="versions">Versions ({d.versions.length})</TabsTrigger>
-          <TabsTrigger value="share">Share and PDF</TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
-        </TabsList>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <TabsList className="mb-0" aria-label="Quotation sections">
+            <TabsTrigger value="quotation">Quotation</TabsTrigger>
+            <TabsTrigger value="versions">Versions ({d.versions.length})</TabsTrigger>
+            <TabsTrigger value="share">Share and PDF</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
+          <p className="text-xs text-muted-foreground">
+            Viewing v{version.versionNumber}{isCurrent ? " · current" : " · read-only"}
+          </p>
+        </div>
         <TabsContent value="quotation" className="flex flex-col gap-6">
+          <ItineraryCard version={version} />
+          <HotelsCard version={version} />
           <PricingTable version={version} currency={quote.currency} />
           <MarginPanel version={version} currency={quote.currency} />
-          <div className="grid gap-6 lg:grid-cols-2">
-            <ItineraryCard version={version} />
-            <HotelsCard version={version} />
-          </div>
           <TermsCard version={version} />
         </TabsContent>
         <TabsContent value="versions" className="flex flex-col gap-6">

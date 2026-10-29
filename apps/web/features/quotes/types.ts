@@ -47,6 +47,8 @@ export interface QuoteStop {
 export interface QuoteSelection {
   destination: string;
   costMinor?: number;
+  /** Stored property photograph, or the first Google Hotels photograph when the catalogue has none. */
+  imageUrl?: string | null;
   offer: {
     property: { name: string; category: string | null };
     roomType: { name: string };

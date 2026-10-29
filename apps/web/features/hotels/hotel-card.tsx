@@ -29,12 +29,14 @@ function initials(name: string): string {
  * Property photograph. Missing or broken images get a designed placeholder rather than a blank
  * rectangle: a monogram and "No photo" for cards, a single hotel mark for thumbnails.
  */
-export function CoverImage({ imageId, alt, className, variant = "compact" }: { imageId?: string | null; alt: string; className?: string; variant?: "compact" | "card" }) {
+export function CoverImage({ imageId, src, alt, className, variant = "compact" }: { imageId?: string | null; src?: string | null; alt: string; className?: string; variant?: "compact" | "card" }) {
   const [failed, setFailed] = React.useState(false);
-  if (imageId && !failed) {
+  React.useEffect(() => setFailed(false), [imageId, src]);
+  const url = src ?? (imageId ? mediaUrl(imageId) : null);
+  if (url && !failed) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={mediaUrl(imageId)} alt={alt} loading="lazy" onError={() => setFailed(true)} className={cn("object-cover", className)} />
+      <img src={url} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className={cn("object-cover", className)} />
     );
   }
   const base = "relative flex overflow-hidden bg-[radial-gradient(120%_100%_at_18%_0%,color-mix(in_oklab,var(--accent)_16%,transparent),transparent_58%),linear-gradient(145deg,var(--muted),var(--card))] text-foreground/25";

@@ -268,6 +268,16 @@ describe("end-to-end workflow", () => {
     expect(staffPdf.text.startsWith("%PDF-")).toBe(true);
   });
 
+  it("13b. attaches the first property photograph to each staff quote stay", async () => {
+    const detail = await operator.ok("GET", `/quotes/${quoteId}`);
+    const propertyId = detail.version.package.selections[0].offer.property.id;
+    const image = await operator.ok("POST", `/hotels/${propertyId}/images`, { sourceUrl: "https://example.com/hotel-exterior.jpg", altText: "Hotel exterior" });
+
+    const refreshed = await operator.ok("GET", `/quotes/${quoteId}`);
+    const selection = refreshed.version.package.selections.find((s: any) => s.offer.property.id === propertyId);
+    expect(selection.imageUrl).toBe(`/api/v1/media/${image.id}`);
+  });
+
   it("14. rejects every kind of cross-tenant access", async () => {
     const probes: [string, string, unknown?][] = [
       ["GET", `/trips/${tripId}`], ["PATCH", `/trips/${tripId}`, { title: "x" }], ["GET", `/trips/${tripId}/itinerary`], ["GET", `/trips/${tripId}/packages`],

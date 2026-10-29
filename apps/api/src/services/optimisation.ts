@@ -27,6 +27,17 @@ export interface PipelineCtx {
 
 export const dbOfferId = (orgId: string, offerId: string) => `${orgId}:${offerId}`;
 
+/** Providers that add no live supplier rate: the catalogue, estimated discovery and illustrative mock data. */
+const NON_LIVE_PROVIDER_KEYS = new Set(["internal", "osm_discovery", "mock"]);
+const NO_LIVE_EXTERNAL_WARNING =
+  "You asked to include external providers, but no live external supplier was available for this run. Only your own catalogue and any estimate-only discovery listings were searched. Enable Google Hotels in Settings → Integrations and run again for live cross-OTA prices.";
+
+/** Explains a run where the agent asked for external rates but no live supplier was actually available. */
+export function externalProviderWarning(requested: boolean, providerKeys: string[]): string | null {
+  if (!requested || providerKeys.some((key) => !NON_LIVE_PROVIDER_KEYS.has(key))) return null;
+  return NO_LIVE_EXTERNAL_WARNING;
+}
+
 const MEAL_ORDER: MealPlan[] = ["RO", "BB", "HB", "FB", "AI"];
 /** A "minimum meal plan" accepts that plan and every richer one (e.g. BB accepts BB/HB/FB/AI). */
 export function mealPlansAtLeast(min: MealPlan | null | undefined): MealPlan[] {
@@ -225,6 +236,8 @@ export async function stageFetch(ctx: PipelineCtx, jobId: string): Promise<{ off
     googleHotelsDirect: integrations.googleHotelsDirect,
     includeMock: request.constraints.includeMockProvider && integrations.mockProvider,
   });
+  const providerWarning = externalProviderWarning(request.constraints.includeExternalProviders, providers.map((p) => p.key));
+  const warnings = providerWarning && !(summary.warnings ?? []).includes(providerWarning) ? [...(summary.warnings ?? []), providerWarning] : (summary.warnings ?? []);
 
   await trips.updateJobProgress(ctx.db, jobId, 10, "routing");
   const legsResult = await computeStopLegs(ctx.env, ctx.db, ctx.deps, itinerary.stops);
@@ -262,12 +275,12 @@ export async function stageFetch(ctx: PipelineCtx, jobId: string): Promise<{ off
     // Persist after each stop so a later failure resumes here instead of paying for earlier stops again.
     await trips.saveJobSummary(ctx.db, jobId, {
       ...summary, stage: "fetched", candidates, providers: outcomes, fetchedStops: [...fetched],
-      legs: legsResult.legs, legWarnings: legsResult.warnings, dropped, notes: baseNotes,
+      legs: legsResult.legs, legWarnings: legsResult.warnings, dropped, notes: baseNotes, warnings,
       currency: request.constraints.budgetCurrency ?? trip.budgetCurrency,
     } satisfies JobSummary);
   }
   const fetchNotes = duplicates > 0 ? [`${duplicates} discovery listing${duplicates === 1 ? "" : "s"} already existed in your catalogue or another source and ${duplicates === 1 ? "was" : "were"} merged into it.`] : [];
-  await trips.saveJobSummary(ctx.db, jobId, { ...summary, stage: "fetched", candidates, providers: outcomes, fetchedStops: [...fetched], legs: legsResult.legs, legWarnings: legsResult.warnings, dropped, notes: [...baseNotes, ...fetchNotes], currency: request.constraints.budgetCurrency ?? trip.budgetCurrency } satisfies JobSummary);
+  await trips.saveJobSummary(ctx.db, jobId, { ...summary, stage: "fetched", candidates, providers: outcomes, fetchedStops: [...fetched], legs: legsResult.legs, legWarnings: legsResult.warnings, dropped, notes: [...baseNotes, ...fetchNotes], warnings, currency: request.constraints.budgetCurrency ?? trip.budgetCurrency } satisfies JobSummary);
   await trips.updateJobProgress(ctx.db, jobId, 65, "optimising");
   return { offers: total };
 }
@@ -296,7 +309,7 @@ export async function stageSearch(ctx: PipelineCtx, jobId: string): Promise<{ pa
     : [];
   const final: JobSummary = {
     ...summary, stage: "done", notes: [...(summary.notes ?? []), ...notes], funnel: result.funnel, infeasible: result.infeasible, omittedObjectives: result.omittedObjectives, stats: result.stats,
-    warnings: [...result.warnings, ...(summary.legWarnings ?? [])], packageIds: ids,
+    warnings: [...new Set([...(summary.warnings ?? []), ...result.warnings, ...(summary.legWarnings ?? [])])], packageIds: ids,
   };
   await trips.finishJob(ctx.db, jobId, { status: result.packages.length > 0 ? "succeeded" : "infeasible", summary: final });
   if (result.packages.length > 0) await trips.setTripStatus(ctx.db, org, trip.id, "optimised", null);
